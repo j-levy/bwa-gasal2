@@ -1,0 +1,3 @@
+[submodule "GASAL2"]
+	path = GASAL2
+	url = https://github.com/j-levy/GASAL2.git
