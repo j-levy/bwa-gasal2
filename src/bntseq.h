@@ -32,7 +32,10 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <zlib.h>
-#include "../../gasal2/include/gasal.h"
+#include "../GASAL2/include/gasal.h"
+#include "../GASAL2/include/args_parser.h"
+#include "../GASAL2/include/host_batch.h"
+#include "../GASAL2/include/gasal_align.h"
 
 #ifndef BWA_UBYTE
 #define BWA_UBYTE

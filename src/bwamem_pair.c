@@ -48,7 +48,9 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 	int i, d, max;
 	uint64_v isize[4];
 	memset(pes, 0, 4 * sizeof(mem_pestat_t));
-	memset(isize, 0, sizeof(kvec_t(int)) * 4);
+	// J.L. 2018-12-21 15:37 (G++ error) error: types may not be defined in ‘sizeof’ expressions. Created intermediate variable to define the type outside sizeof
+	kvec_t(int) tmp;
+	memset(isize, 0, sizeof(tmp) * 4);
 	for (i = 0; i < n>>1; ++i) {
 		int dir;
 		int64_t is;

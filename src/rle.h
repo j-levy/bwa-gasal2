@@ -30,7 +30,8 @@ extern "C" {
  *** 43+3 codec ***
  ******************/
 
-const uint8_t rle_auxtab[8];
+// J.L 2018-12-21 16:15 Should not be defined here, cause it makes double definition in rle.c, and is not used anywhere else.
+//const uint8_t rle_auxtab[8];
 
 #define RLE_MIN_SPACE 18
 #define rle_nptr(block) ((uint16_t*)(block))

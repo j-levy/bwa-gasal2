@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <stdio.h>
+#include <math.h>
 #include "utils.h"
 #include "../../gasal2/include/gasal.h"
 /************

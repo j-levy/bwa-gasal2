@@ -654,15 +654,15 @@ int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_
          continue; // then no need to go into the loop below
       for (j = i - 1; j >= 0 && p->rid == a[j].rid && p->rb < a[j].re + opt->max_chain_gap; --j) {
          mem_alnreg_t *q = &a[j];
-         int64_t or, oq, mr, mq;
+         int64_t pr, pq, mr, mq;
          int score, w;
          if (q->qe == q->qb)
             continue; // a[j] has been excluded
-         or = q->re - p->rb; // overlap length on the reference
-         oq = q->qb < p->qb ? q->qe - p->qb : p->qe - q->qb; // overlap length on the query
+         pr = q->re - p->rb; // overlap length on the reference
+         pq = q->qb < p->qb ? q->qe - p->qb : p->qe - q->qb; // overlap length on the query
          mr = q->re - q->rb < p->re - p->rb ? q->re - q->rb : p->re - p->rb; // min ref len in alignment
          mq = q->qe - q->qb < p->qe - p->qb ? q->qe - q->qb : p->qe - p->qb; // min qry len in alignment
-         if (or > opt->mask_level_redun * mr && oq > opt->mask_level_redun * mq) { // one of the hits is redundant
+         if (pr > opt->mask_level_redun * mr && pq > opt->mask_level_redun * mq) { // one of the hits is redundant
             if (p->score < q->score) {
                p->qe = p->qb;
                break;
@@ -1184,8 +1184,17 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
     	  int ref_l_seq = rmax[1] - rmax[0];
     	  while (ref_l_seq < ref_l_seq_with_p) {
     		  //kv_push(uint8_t, *ref_seq_batch, 0);
-    		  if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes) curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = 4;
-    		  else {
+    		  if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes) 
+            {
+            // J.L. 2018-12-20 16:17 TODO : create some function to add a single base
+            //curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = 4;
+            char tmpval = 4;
+            curr_gpu_batch->n_target_batch = gasal_host_batch_fill(curr_gpu_batch->gpu_storage, 
+									curr_gpu_batch->n_target_batch, 
+									&tmpval, 
+									1,
+									TARGET);
+    		  } else {
     			  fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
 				  exit(EXIT_FAILURE);
     		  }
@@ -2314,7 +2323,17 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 //				}
 				for (i = 0; i < seq[j].l_seq; ++i){ // convert to 2-bit encoding if we have not done so
 					read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]];
-					if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes) gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];
+					if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes) 
+               {
+                  // J.L. 2018-12-20 16:23 TODO : add some function to add a single base
+                  //gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];
+                  char tmpval = 1;
+                  gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_fill(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
+									gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
+									&read_seq[i], 
+									&tmpval,
+									QUERY);
+               }
 					else {
 						fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
 						exit(EXIT_FAILURE);
@@ -2324,7 +2343,17 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 				int read_l_seq = seq[j].l_seq;
 				while(read_l_seq < read_l_seq_with_p) {
 					//kv_push(uint8_t, read_seq_batch, 0);
-					if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes)gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;
+					if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes)
+               {
+                  //gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;
+                  // J.L. 2018-12-20 17:00 TODO : add some function to add a single base
+                  char tmpval = 4;
+                  gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_fill(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
+									gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
+									&tmpval, 
+									1,
+									QUERY);
+               }
 					else {
 						fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
 						exit(EXIT_FAILURE);
@@ -2403,7 +2432,13 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
 				time_extend = realtime();
 				//gasal_aln_async_new(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, kv_size(read_seq_batch), kv_size(ref_seq_batch), kv_size(ref_seq_lens), LOCAL, WITH_START);
-				gasal_aln_async(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, gpu_batch_arr[gpu_batch_arr_idx].n_target_batch, gpu_batch_arr[gpu_batch_arr_idx].n_seqs, LOCAL, WITH_START);
+            //J.L. 2018-12-20 17:24 Added params object.
+            Parameters *args;
+            args = new Parameters(0, NULL);
+
+            args->algo = LOCAL;
+
+				gasal_aln_async(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, gpu_batch_arr[gpu_batch_arr_idx].n_target_batch, gpu_batch_arr[gpu_batch_arr_idx].n_seqs, args);
 				extension_time[tid].aln_kernel += (realtime() - time_extend);
 				gpu_batch_arr[gpu_batch_arr_idx].no_extend = 0;
 			} else {
@@ -2443,12 +2478,14 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 			else if (gpu_batch_arr[internal_batch_idx].gpu_storage->is_free != 1 && x == 0) extension_time[tid].get_results_wasted += (realtime() - time_extend);
 			//fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d, batches launched=%d, batches done=%d \n", tid, batch_size, internal_batch_count, internal_batch_idx, internal_batch_no, internal_batch_done);
 			//fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is \n");
-			if ((x == 1 || gpu_batch_arr[internal_batch_idx].no_extend == 1) && gpu_batch_arr[internal_batch_idx].is_active == 1){
-				int32_t *max_score = gpu_batch_arr[internal_batch_idx].gpu_storage->host_aln_score;
-			    int32_t *read_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_query_batch_start;
-			    int32_t  *read_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_query_batch_end;
-			    int32_t *ref_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_target_batch_start;
-			    int32_t   *ref_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_target_batch_end;
+			if ((x == 1 || gpu_batch_arr[internal_batch_idx].no_extend == 1) && gpu_batch_arr[internal_batch_idx].is_active == 1)
+         {
+			// J.L. 2018-12-21 15:21 changed calls with best score
+         	int32_t *max_score = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->aln_score;
+			    int32_t *read_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->query_batch_start;
+			    int32_t  *read_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->query_batch_end;
+			    int32_t *ref_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->target_batch_start;
+			    int32_t   *ref_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->target_batch_end;
 
 
 //				int32_t *max_score = gpu_batch_arr[internal_batch_idx].gpu_storage->host_aln_score;
