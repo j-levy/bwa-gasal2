@@ -399,6 +399,7 @@ int gase_aln(int argc, char *argv[])
 	gpu_storage_vec_arr =  (gasal_gpu_storage_v*)calloc(opt->n_threads, sizeof(gasal_gpu_storage_v));
 	int z;
 	for (z = 0; z < opt->n_threads; z++) {
+		// J.L. 2018-12-21 TODO change these to reflect ctors in GASAL2
 		gpu_storage_vec_arr[z] = gasal_init_gpu_storage_v(2);
 		gasal_init_streams(&(gpu_storage_vec_arr[z]), 1000*300, 1000*300, 250*1000*600, 80*1000*600, 500*1000, 200*1000, LOCAL, WITH_START);
 	}
@@ -421,6 +422,7 @@ int gase_aln(int argc, char *argv[])
 
 	time_extend = realtime();
 	for (z = 0; z < opt->n_threads; z++) {
+		// J.L. 2018-12-21 TODO change these to reflect ctors in GASAL2
 		gasal_destroy_streams(&(gpu_storage_vec_arr[z]));
 		gasal_destroy_gpu_storage_v(&(gpu_storage_vec_arr[z]));
 	}
