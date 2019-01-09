@@ -188,6 +188,9 @@ extern "C" {
 	 */
 	void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4]);
 
+	
+	void kt_for(int n_threads, void (*func)(void*, int, int, int, int), void *data, int n);
+
 #ifdef __cplusplus
 }
 #endif

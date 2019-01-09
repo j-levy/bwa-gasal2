@@ -395,13 +395,27 @@ int gase_aln(int argc, char *argv[])
 
 	gasal_copy_subst_scores(&sub_scores);
 
+	// J.L. 2019-01-07 10:43 added args object
+	Parameters *args;
+	args = new Parameters(0, NULL);
+	args->algo = LOCAL;
+
 	double time_extend = realtime();
 	gpu_storage_vec_arr =  (gasal_gpu_storage_v*)calloc(opt->n_threads, sizeof(gasal_gpu_storage_v));
 	int z;
 	for (z = 0; z < opt->n_threads; z++) {
-		// J.L. 2018-12-21 TODO change these to reflect ctors in GASAL2
+		// J.L. 2018-12-21 change these to reflect ctors in GASAL2 
 		gpu_storage_vec_arr[z] = gasal_init_gpu_storage_v(2);
-		gasal_init_streams(&(gpu_storage_vec_arr[z]), 1000*300, 1000*300, 250*1000*600, 80*1000*600, 500*1000, 200*1000, LOCAL, WITH_START);
+		//gasal_init_streams(&(gpu_storage_vec_arr[z]), 1000*300, 1000*300, 250*1000*600, 80*1000*600, 500*1000, 200*1000, LOCAL, WITH_START);
+		// J.L. 2019-01-07 10:43 TODO remove numbers from here, put them in DEFINES.
+		gasal_init_streams(&(gpu_storage_vec_arr[z]), 
+				1000*300 , 		//host_max_query_batch_bytes
+				1000*300 , 		//gpu_max_query_batch_bytes
+				250*1000*600 , 	//host_max_target_batch_bytes
+				80*1000*600 , 	//gpu_max_target_batch_bytes
+				500*1000, 		//host_max_n_alns.
+				200*1000, 		//gpu_max_n_alns
+				args);
 	}
 	extension_time[0].gpu_mem_alloc += (realtime() - time_extend);
 
@@ -422,8 +436,8 @@ int gase_aln(int argc, char *argv[])
 
 	time_extend = realtime();
 	for (z = 0; z < opt->n_threads; z++) {
-		// J.L. 2018-12-21 TODO change these to reflect ctors in GASAL2
-		gasal_destroy_streams(&(gpu_storage_vec_arr[z]));
+		// J.L. 2018-12-21 change these to reflect ctors in GASAL2
+		gasal_destroy_streams(&(gpu_storage_vec_arr[z]), args);
 		gasal_destroy_gpu_storage_v(&(gpu_storage_vec_arr[z]));
 	}
 	free(gpu_storage_vec_arr);

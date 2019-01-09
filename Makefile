@@ -1,9 +1,10 @@
 
-CXX=g++
+CXX=gcc
+CC=gcc
 VPATH=src:obj:lib
 OBJ_DIR=./obj/
 LIB_DIR=./lib/
-CUDA_LIB_DIR=/usr/local/cuda-9.2/lib64
+CUDA_LIB_DIR=/usr/local/cuda-9.2/lib64/
 GASAL_LIB_DIR = ./GASAL2/lib/
 GASAL_INCLUDE_DIR = ./GASAL2/include/
 #SHD_DIR=./src/shd_filter/
@@ -28,6 +29,8 @@ AOBJS=bwashm.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
 	bwape.o kopen.o pemerge.o maxk.o \
 	bwtsw2_core.o bwtsw2_main.o bwtsw2_aux.o bwt_lite.o \
 	bwtsw2_chain.o fastmap.o bwtsw2_pair.o
+
+
 AOBJS_PATH=$(addprefix $(OBJ_DIR),$(AOBJS))
 PROG=bwa-gasal2
 INCLUDES= -I$(GASAL_INCLUDE_DIR) 
@@ -62,14 +65,16 @@ makedir:
 	@echo "If you donot see anything below this line then there is nothing to \"make\""
 
 bwa-gasal2:libbwa.a libshd_filter.a  $(AOBJS) main.o
-		$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS_PATH) $(OBJ_DIR)main.o -o $@ -L$(LIB_DIR) -L$(CUDA_LIB_DIR)  -L$(GASAL_LIB_DIR) -lbwa -lshd_filter -lgasal $(LIBS)
+		$(CXX) $(CFLAGS) $(DFLAGS) $(AOBJS_PATH) $(OBJ_DIR)main.o -o $@ -L$(LIB_DIR) -L$(CUDA_LIB_DIR)  -L$(GASAL_LIB_DIR) -lbwa -lshd_filter -lgasal $(LIBS)
 
 
 libbwa.a:$(LOBJS)
+		echo "ARCHIVING: libbwa.a"
 		$(AR) -csru $(LIB_DIR)$@ $(LOBJS_PATH)
 
 libshd_filter.a: $(SHD_OBJS)
 		#make -C ./src/shd_filter libshd_filter.a
+		echo "ARCHIVING: libshd_filter.a"
 		$(AR) -csru $(LIB_DIR)$@ $(SHD_OBJS_PATH)
 		
 #libgasal.a: $(GASAL_OBJS)

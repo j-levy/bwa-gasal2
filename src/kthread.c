@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <math.h>
 #include "utils.h"
-#include "../../gasal2/include/gasal.h"
+#include "../GASAL2/include/gasal.h"
 /************
  * kt_for() *
  ************/

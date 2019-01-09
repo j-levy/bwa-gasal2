@@ -36,6 +36,7 @@
 #include "../GASAL2/include/args_parser.h"
 #include "../GASAL2/include/host_batch.h"
 #include "../GASAL2/include/gasal_align.h"
+#include "../GASAL2/include/ctors.h"
 
 #ifndef BWA_UBYTE
 #define BWA_UBYTE
