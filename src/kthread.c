@@ -5,6 +5,16 @@
 #include <math.h>
 #include "utils.h"
 #include "../GASAL2/include/gasal.h"
+
+ 
+// J.L. 2019-01-10 09:50 adding extern C proto
+#ifdef __cplusplus
+extern "C"{
+	void kt_for(int n_threads, void (*func)(void*,int, int, int, int), void *data, long n);
+}
+#endif
+
+
 /************
  * kt_for() *
  ************/

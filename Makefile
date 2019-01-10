@@ -1,5 +1,5 @@
 
-CXX=gcc
+CXX=g++
 CC=gcc
 VPATH=src:obj:lib
 OBJ_DIR=./obj/
@@ -57,7 +57,7 @@ endif
 #		 nvcc -c $(NVCCFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$(notdir $@)
 
 
-all: makedir $(PROG) 
+all: clean makedir $(PROG) 
 
 makedir:
 	@mkdir -p $(OBJ_DIR)

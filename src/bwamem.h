@@ -189,8 +189,13 @@ extern "C" {
 	void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4]);
 
 	
-	void kt_for(int n_threads, void (*func)(void*, int, int, int, int), void *data, int n);
+	// J.L. 2019-01-09 15:54 added prototype here in extern C	
+	//extern void kt_for(int n_threads, void (*func)(void*,int,int), void *data, int n);
+	extern char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_alnreg_v *a, int l_query, const char *query);
+	extern void kt_for(int n_threads, void (*func)(void*, int, int, int, int), void *data, int n);
 
+	// J.L. 2019-01-10 10:15 moved proto from bwamem_extra.c
+	void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *seq, void *buf, int batch_size, int batch_start_idx, mem_alnreg_v *w_regs, int tid, gasal_gpu_storage_v *gpu_storage_vec);
 #ifdef __cplusplus
 }
 #endif
