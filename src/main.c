@@ -67,6 +67,14 @@ int main(int argc, char *argv[])
 	int i, ret;
 	double t_real;
 	extern FILE* f_exec_time;
+	f_exec_time = NULL;
+	f_exec_time = fopen("time.log", "w+");
+	if (f_exec_time == NULL)
+	{
+		fprintf(stderr, "[main] error: could not open/create the log file time.log\nAborting.\n");
+		exit(EXIT_FAILURE);
+	}
+
 	kstring_t pg = {0,0,0};
 	t_real = realtime();
 	ksprintf(&pg, "@PG\tID:bwa\tPN:bwa\tVN:%s\tCL:%s", PACKAGE_VERSION, argv[0]);
