@@ -23,3 +23,8 @@ src/\.vscode/
 *.nvvp
 
 *.nvprof
+
+
+fasta/
+bwa-gasal2
+
