@@ -37,6 +37,10 @@ INCLUDES= -I$(GASAL_INCLUDE_DIR)
 LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
+
+VALGRIND= valgrind 
+#--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
+
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt
 endif
@@ -56,8 +60,19 @@ endif
 #.cu.o:
 #		 nvcc -c $(NVCCFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$(notdir $@)
 
+run: all
+		./$(PROG) index fasta/target_batch.fasta
+		$(VALGRIND) ./$(PROG) gase_aln -l 157 fasta/target_batch.fasta fasta/query_batch.fasta > res.log
 
-all: clean makedir $(PROG) 
+short: clean all
+		./$(PROG) index fasta/short_target_batch.fasta
+		$(VALGRIND) ./$(PROG) gase_aln -l 150 fasta/short_target_batch.fasta fasta/short_query_batch.fasta > res.log
+tell: clean all	
+		./$(PROG) index fasta/short_target_batch.fasta
+		./$(PROG) gase_aln -v 4 -l 150 fasta/short_target_batch.fasta fasta/short_query_batch.fasta > res.log
+
+
+all: makedir $(PROG) 
 
 makedir:
 	@mkdir -p $(OBJ_DIR)

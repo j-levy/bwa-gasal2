@@ -110,18 +110,32 @@ void bwa_fill_scmat(int a, int b, int8_t mat[25])
 // Generate CIGAR when the alignment end points are known
 uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, int e_ins, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar, int *NM)
 {
-	uint32_t *cigar = 0;
+	uint32_t *cigar = NULL;
 	uint8_t tmp, *rseq;
 	int i;
 	int64_t rlen;
 	kstring_t str;
 	const char *int2base;
 
-	if (n_cigar) *n_cigar = 0;
-	if (NM) *NM = -1;
-	if (l_query <= 0 || rb >= re || (rb < l_pac && re > l_pac)) return 0; // reject if negative length or bridging the forward and reverse strand
+
+	if (n_cigar != NULL) *n_cigar = 0;
+	if (NM != NULL) *NM = -1;
+	if (l_query <= 0 || rb >= re || (rb < l_pac && re > l_pac)) 
+	{
+		// J.L. 2019-01-16 15:37 fixed return value.
+		// /!\ can't return 0, as the a.cigar pointer will be assigned to no memory space, so it will caus segfaults !
+		fprintf(stderr, "[bwa_gen_cigar2] error: reject if negative length or bridging the forward and reverse strand. Returning here leads to segfault\n\n");
+		cigar = (uint32_t*) malloc(1 * sizeof(uint32_t));
+		cigar[0] = '\0';
+		return cigar; // reject if negative length or bridging the forward and reverse strand
+		// can't be: return 0;
+	}
 	rseq = bns_get_seq(l_pac, pac, rb, re, &rlen);
-	if (re - rb != rlen) goto ret_gen_cigar; // possible if out of range
+	if (re - rb != rlen) 
+	{
+		fprintf(stderr, "[bwa_gen_cigar2] error: out of range : re - rb = %d - %d != rlen (%d)\nBe careful: returning here leads to segfault\n", re, rb, rlen);
+		goto ret_gen_cigar; // possible if out of range
+	}
 	if (rb >= l_pac) { // then reverse both query and rseq; this is to ensure indels to be placed at the leftmost position
 		for (i = 0; i < l_query>>1; ++i)
 			tmp = query[i], query[i] = query[l_query - 1 - i], query[l_query - 1 - i] = tmp;
@@ -130,11 +144,15 @@ uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, 
 	}
 	if (l_query == re - rb && w_ == 0) { // no gap; no need to do DP
 		// UPDATE: we come to this block now... FIXME: due to an issue in mem_reg2aln(), we never come to this block. This does not affect accuracy, but it hurts performance.
-		if (n_cigar) {
-			cigar = malloc(4);
+		if (n_cigar != NULL) {
+			fprintf(stderr, "[bwa_gen_cigar2] Malloc'ing cigar...");
+			cigar = (uint32_t*) malloc(1 * sizeof(uint32_t));
 			cigar[0] = l_query<<4 | 0;
 			*n_cigar = 1;
+			
+			fprintf(stderr, " done. ");
 		}
+		fprintf(stderr, "cigar=0x%x of size %d, *n_cigar=%d\n", cigar, sizeof(uint32_t), *n_cigar);
 		for (i = 0, *score = 0; i < l_query; ++i)
 			*score += mat[rseq[i]*5 + query[i]];
 	} else {
@@ -156,13 +174,14 @@ uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, 
 		}
 		*score = ksw_global2(l_query, query, rlen, rseq, 5, mat, o_del, e_del, o_ins, e_ins, w, n_cigar, &cigar);
 	}
-	if (NM && n_cigar) {// compute NM and MD
+	if (NM != NULL && n_cigar != NULL) {// compute NM and MD
 		int k, x, y, u, n_mm = 0, n_gap = 0;
-		str.l = str.m = *n_cigar * 4; str.s = (char*)cigar; // append MD to CIGAR
+		str.l = str.m = *n_cigar * 4; 
+		str.s = (char*)cigar; // append MD to CIGAR
 		int2base = rb < l_pac? "ACGTN" : "TGCAN";
 		for (k = 0, x = y = u = 0; k < *n_cigar; ++k) {
 			int op, len;
-			cigar = (uint32_t*)str.s;
+			cigar = (uint32_t*) str.s;
 			op  = cigar[k]&0xf, len = cigar[k]>>4;
 			if (op == 0) { // match
 				for (i = 0; i < len; ++i) {

@@ -13,6 +13,9 @@
 #include "bntseq.h"
 #include "kseq.h"
 
+// J.L. 2019-01-13 - select GPU when using more than one. Use the first available (0) by default.
+#define GPU_SELECT (0)
+
 KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
@@ -118,6 +121,10 @@ FILE* f_exec_time;
 gasal_gpu_storage_v *gpu_storage_vec_arr;
 int gase_aln(int argc, char *argv[])
 {
+
+	// J.L. 2019-01-13 - select GPU with corresponding function.
+	gasal_set_device(GPU_SELECT);
+
 	mem_opt_t *opt, opt0;
 	int fd, fd2, i, c, ignore_alt = 0, no_mt_io = 0;
 	int fixed_chunk_size = -1;
@@ -129,7 +136,7 @@ int gase_aln(int argc, char *argv[])
 	ktp_aux_t aux;
 	extern time_struct *extension_time;
 	//run_exec_time = "run_exec_time.txt";
-	sprintf(run_exec_time, "f");
+	sprintf(run_exec_time, "run_exec_time");
 	memset(&aux, 0, sizeof(ktp_aux_t));
 	memset(pes, 0, 4 * sizeof(mem_pestat_t));
 	for (i = 0; i < 4; ++i) pes[i].failed = 1;
@@ -399,6 +406,7 @@ int gase_aln(int argc, char *argv[])
 	Parameters *args;
 	args = new Parameters(0, NULL);
 	args->algo = LOCAL;
+	args->start_pos = WITH_START;
 
 	double time_extend = realtime();
 	gpu_storage_vec_arr =  (gasal_gpu_storage_v*)calloc(opt->n_threads, sizeof(gasal_gpu_storage_v));
@@ -408,6 +416,8 @@ int gase_aln(int argc, char *argv[])
 		gpu_storage_vec_arr[z] = gasal_init_gpu_storage_v(2);
 		//gasal_init_streams(&(gpu_storage_vec_arr[z]), 1000*300, 1000*300, 250*1000*600, 80*1000*600, 500*1000, 200*1000, LOCAL, WITH_START);
 		// J.L. 2019-01-07 10:43 TODO remove numbers from here, put them in DEFINES.
+		// Original values below
+		/*
 		gasal_init_streams(&(gpu_storage_vec_arr[z]), 
 				1000*300 , 		//host_max_query_batch_bytes
 				1000*300 , 		//gpu_max_query_batch_bytes
@@ -416,6 +426,23 @@ int gase_aln(int argc, char *argv[])
 				500*1000, 		//host_max_n_alns.
 				200*1000, 		//gpu_max_n_alns
 				args);
+		*/
+		
+
+		int Coef = 9;
+		int NbrOfSeqs = 20000;
+		int ReadLength = 157;
+		int RefLength = 290;
+		gasal_init_streams(&(gpu_storage_vec_arr[z]), 
+				Coef * NbrOfSeqs * ReadLength , 		//host_max_query_batch_bytes
+				Coef * NbrOfSeqs * ReadLength , 		//gpu_max_query_batch_bytes
+				Coef * NbrOfSeqs * RefLength , 	//host_max_target_batch_bytes
+				Coef * NbrOfSeqs * RefLength , 	//gpu_max_target_batch_bytes
+				Coef * NbrOfSeqs, 		//host_max_n_alns.
+				Coef * NbrOfSeqs, 		//gpu_max_n_alns
+				args);
+		
+
 	}
 	extension_time[0].gpu_mem_alloc += (realtime() - time_extend);
 

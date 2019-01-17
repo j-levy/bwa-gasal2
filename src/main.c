@@ -31,11 +31,11 @@ int main_maxk(int argc, char *argv[]);
 static int usage()
 {
 	fprintf(stderr, "\n");
-	fprintf(stderr, "Program: GASE (Generic Aligner for Seed-and-Extend)\n");
+	fprintf(stderr, "Program: BWA-GASAL2 (derived from GASE: Generic Aligner for Seed-and-Extend)\n");
 	fprintf(stderr, "Version: %s\n", PACKAGE_VERSION);
-	fprintf(stderr, "GASE is an extension of BWA (version 0.7.13) which is developed by Heng Li.\n");
+	fprintf(stderr, "BWA-GASAL2 is an extension of BWA (version 0.7.13) which is developed by Heng Li.\n");
 	fprintf(stderr, "Contact: Nauman Ahmed <n.ahmed@tudelft.nl>\n\n");
-	fprintf(stderr, "Usage:   gase <command> [options]\n\n");
+	fprintf(stderr, "Usage:   bwa-gasal2 <command> [options]\n\n");
 	fprintf(stderr, "Command: index         index sequences in the FASTA format\n");
 	fprintf(stderr, "         gase_aln           GASE algorithm\n");
 	/*fprintf(stderr, "         fastmap       identify super-maximal exact matches\n");
@@ -52,7 +52,7 @@ static int usage()
 	fprintf(stderr, "         bwtupdate     update .bwt to the new format\n");
 	fprintf(stderr, "         bwt2sa        generate SA from BWT and Occ\n");*/
 	fprintf(stderr, "\n");
-	fprintf(stderr, "Note: To use GASE, you need to first index the genome with `gase index'.\n\n");
+	fprintf(stderr, "Note: To use bwa-gasal2, you need to first index the genome with `bwa-gasal2 index'.\n\n");
 	return 1;
 }
 

@@ -472,10 +472,9 @@ void bns_get_seq_gpu(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end
 					// J.L. 2018-12-20 15:04
 					//curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = 3 - _get_pac(pac, k);
 					char tmpval = 3 - (_get_pac(pac, k)); 
-					curr_gpu_batch->n_target_batch = gasal_host_batch_fill(curr_gpu_batch->gpu_storage, 
+					curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
 									curr_gpu_batch->n_target_batch, 
-									&tmpval, 
-									1,
+									tmpval, 
 									TARGET);
 				} else {
 					fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
@@ -491,10 +490,9 @@ void bns_get_seq_gpu(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end
 					// J.L. 2018-12-20 15:04 TODO : write a function in the library to write a single base. would be cool.
 					//curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = _get_pac(pac, k);
 					char tmpval = 3 - (_get_pac(pac, k));
-					curr_gpu_batch->n_target_batch = gasal_host_batch_fill(curr_gpu_batch->gpu_storage, 
+					curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
 									curr_gpu_batch->n_target_batch, 
-									&tmpval, 
-									1,
+									tmpval, 
 									TARGET);
 				} else {
 					fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
