@@ -417,7 +417,7 @@ int gase_aln(int argc, char *argv[])
 		//gasal_init_streams(&(gpu_storage_vec_arr[z]), 1000*300, 1000*300, 250*1000*600, 80*1000*600, 500*1000, 200*1000, LOCAL, WITH_START);
 		// J.L. 2019-01-07 10:43 TODO remove numbers from here, put them in DEFINES.
 		// Original values below
-		/*
+		
 		gasal_init_streams(&(gpu_storage_vec_arr[z]), 
 				1000*300 , 		//host_max_query_batch_bytes
 				1000*300 , 		//gpu_max_query_batch_bytes
@@ -426,13 +426,14 @@ int gase_aln(int argc, char *argv[])
 				500*1000, 		//host_max_n_alns.
 				200*1000, 		//gpu_max_n_alns
 				args);
-		*/
 		
-
-		int Coef = 9;
+		/*
+		// from 1 to 3: The size of host lens1 (Coef*NbrOfSequs+1) exceeds the allocation (Coef*NbrOfSequs)
+		// 4 onwards : segfaults
+		int Coef = 4;
 		int NbrOfSeqs = 20000;
 		int ReadLength = 157;
-		int RefLength = 290;
+		int RefLength = 289; // the longest is 282, add some padding you get at most 289... 
 		gasal_init_streams(&(gpu_storage_vec_arr[z]), 
 				Coef * NbrOfSeqs * ReadLength , 		//host_max_query_batch_bytes
 				Coef * NbrOfSeqs * ReadLength , 		//gpu_max_query_batch_bytes
@@ -441,6 +442,7 @@ int gase_aln(int argc, char *argv[])
 				Coef * NbrOfSeqs, 		//host_max_n_alns.
 				Coef * NbrOfSeqs, 		//gpu_max_n_alns
 				args);
+		*/
 		
 
 	}

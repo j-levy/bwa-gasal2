@@ -469,13 +469,17 @@ void bns_get_seq_gpu(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end
 				//seq[l++] = 3 - _get_pac(pac, k);
 				if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes)
 				{
-					// J.L. 2018-12-20 15:04
+					// J.L. 2018-12-20 15:04 changed call for addbase
+					// J.L. 2019-01-18 12:30 emulating non-extensible host
 					//curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = 3 - _get_pac(pac, k);
+					curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = 3 - _get_pac(pac, k);
+					/*
 					char tmpval = 3 - (_get_pac(pac, k)); 
 					curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
 									curr_gpu_batch->n_target_batch, 
 									tmpval, 
 									TARGET);
+					*/
 				} else {
 					fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
 					exit(EXIT_FAILURE);
@@ -487,13 +491,16 @@ void bns_get_seq_gpu(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end
 				//seq[l++] = _get_pac(pac, k);
 				if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes)
 				{ 
-					// J.L. 2018-12-20 15:04 TODO : write a function in the library to write a single base. would be cool.
+					// J.L. 2019-01-18 12:30 emulating non-extendable host
 					//curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = _get_pac(pac, k);
+					curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = _get_pac(pac, k);
+					/*
 					char tmpval = 3 - (_get_pac(pac, k));
 					curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
 									curr_gpu_batch->n_target_batch, 
 									tmpval, 
 									TARGET);
+					*/
 				} else {
 					fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
 					exit(EXIT_FAILURE);

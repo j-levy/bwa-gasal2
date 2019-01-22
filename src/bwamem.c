@@ -1186,15 +1186,18 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				//kv_push(uint8_t, *ref_seq_batch, 0);
 				if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes) 
 				{
-					// J.L. 2018-12-20 16:17 TODO : create some function to add a single base
+					// J.L. 2018-12-20 16:17 DONE : create some function to add a single base
+					// J.L. 2019-12-20 12:35  emulating non-extensible memory host
 					//curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = 4;
-
+					curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = 4;
+					/*
 					char tmpval = 4;
 					uint32_t tmp = curr_gpu_batch->n_target_batch;
 					curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
 							curr_gpu_batch->n_target_batch, 
 							tmpval, 
 							TARGET);
+					*/
 					//fprintf(stderr, "curr_gpu_batch->n_target_batch goes from %d to %d\n", tmp, curr_gpu_batch->n_target_batch);
 
 
@@ -2331,13 +2334,17 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 						read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]];
 						if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes) 
 						{
-							// J.L. 2018-12-20 16:23 TODO : add some function to add a single base
+							// J.L. 2018-12-20 16:23 DONE : add some function to add a single base
+							// J.L. 2019-01-18 12:40 Emulating non-extensible host memory
 							//gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];
+							gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];
+							/*
 							char tmpval = 1;
 							gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
 									gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
 									read_seq[i],
 									QUERY);
+							*/
 						}
 						else {
 							fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
@@ -2351,12 +2358,16 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 						if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes)
 						{
 							//gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;
-							// J.L. 2018-12-20 17:00 TODO : add some function to add a single base
+							// J.L. 2018-12-20 17:00 DONE : add some function to add a single base
+							// J.L. 2019-01-18 12:40 Emulating non-extensible host memory
+							gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;
+							/*
 							char tmpval = 4;
 							gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
 									gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
 									tmpval, 
 									QUERY);
+							*/
 						}
 						else {
 							fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
@@ -2520,8 +2531,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 									a->rb = ref_start[seq_idx] + a->rseq_beg;
 									a->re = ref_end[seq_idx] + a->rseq_beg + 1;
 									a->truesc = max_score[seq_idx];
-									fprintf(stderr, "seq_set=%d\tscore=%d\tread_end=%d\tref_end=%d\tread_start=%d\tref_start=%d\n", seq_idx, max_score[seq_idx],
-											read_end[seq_idx], ref_end[seq_idx], read_start[seq_idx], ref_start[seq_idx]);
+									//fprintf(stderr, "seq_set=%d\tscore=%d\tread_end=%d\tref_end=%d\tread_start=%d\tref_start=%d\n", seq_idx, max_score[seq_idx],
+									//		read_end[seq_idx], ref_end[seq_idx], read_start[seq_idx], ref_start[seq_idx]);
 
 
 									//              uint8_t *rs;
@@ -2646,7 +2657,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				a.cigar = bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w2, bns->l_pac, pac, qe - qb, (uint8_t*) &query[qb], rb, re,
 						&score, &a.n_cigar, &NM);
 
-				fprintf(stderr, "in do-while: i=%d, a.cigar=%s, a.n_cigar=%d\n",i,a.cigar, a.n_cigar);
+				//fprintf(stderr, "in do-while: i=%d, a.cigar=%s, a.n_cigar=%d\n",i,a.cigar, a.n_cigar);
 
 				if (bwa_verbose >= 4)
 					printf("* Final alignment: w2=%d, global_sc=%d, local_sc=%d\n", w2, score, ar->truesc);
