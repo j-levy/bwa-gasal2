@@ -1,10 +1,9 @@
-
 CXX=g++
 CC=gcc
 VPATH=src:obj:lib
 OBJ_DIR=./obj/
 LIB_DIR=./lib/
-CUDA_LIB_DIR=/usr/local/cuda-9.2/lib64/
+CUDA_LIB_DIR=/usr/local/cuda-8.0/lib64/
 GASAL_LIB_DIR = ./GASAL2/lib/
 GASAL_INCLUDE_DIR = ./GASAL2/include/
 #SHD_DIR=./src/shd_filter/
@@ -38,7 +37,7 @@ LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
 
-VALGRIND= valgrind 
+VALGRIND=
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
 
 ifeq ($(shell uname -s),Linux)
@@ -60,16 +59,31 @@ endif
 #.cu.o:
 #		 nvcc -c $(NVCCFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$(notdir $@)
 
-run: all
+20k: all
 		./$(PROG) index fasta/target_batch.fasta
-		$(VALGRIND) ./$(PROG) gase_aln -l 157 fasta/target_batch.fasta fasta/query_batch.fasta > res.log
+		./$(PROG) gase_aln -v 4 -l 150 fasta/target_batch.fasta fasta/query_batch.fasta > res.log
+
+srr150index: all
+		./$(PROG) index /data/work/jlevy/hg19.fasta
+
+
+srr150: all
+		./$(PROG) gase_aln -t 10 -l 150 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+
+srr250: all
+	./$(PROG) gase_aln -t 12 -l 250 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > /data/work/jlevy/srr/250/res_bwa_gasal2.log
+
+srr150nvprof: all
+	nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof ./$(PROG) gase_aln -t 12 -l 150 /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+
 
 short: clean all
 		./$(PROG) index fasta/short_target_batch.fasta
-		$(VALGRIND) ./$(PROG) gase_aln -l 150 fasta/short_target_batch.fasta fasta/short_query_batch.fasta > res.log
-tell: clean all	
-		./$(PROG) index fasta/short_target_batch.fasta
 		./$(PROG) gase_aln -v 4 -l 150 fasta/short_target_batch.fasta fasta/short_query_batch.fasta > res.log
+
+clean-db: all
+		rm /data/work/jlevy/srr/150/*.fasta.*
+		rm /data/work/jlevy/srr/150/*.fastq.*
 
 
 all: makedir $(PROG) 
@@ -98,6 +112,7 @@ libshd_filter.a: $(SHD_OBJS)
 
 clean:
 		rm -f -r gmon.out $(OBJ_DIR) a.out $(PROG) *~ $(LIB_DIR)
+		rm *.log
 		#make -C ./src/shd_filter/ clean
 
 #depend:

@@ -1,0 +1,23 @@
+1	150	1	19	19	0	Total_time = 2.912	Average extension time = -nan	Average extension percentage = -nan	Percentage time wasted due to imperfect load balancing = 0.000
+1	150	1	19	19	0	Total_time = 4.209	Average extension time = -nan	Average extension percentage = -nan	Percentage time wasted due to imperfect load balancing = 0.000
+1	150	1	19	19	0	Total_time = 3.069	Average extension time = 0.351	Average extension percentage = 0.631	Percentage time wasted due to imperfect load balancing = 0.000
+1	150	1	19	19	0	Total_time = 10.626	Average extension time = 0.352	Average extension percentage = 0.310	Percentage time wasted due to imperfect load balancing = 0.000
+1	150	1	19	19	0	1	150	1	19	19	0	Total_time = 1773.281	Average extension time = 24.973	Average extension percentage = 1.390	Percentage time wasted due to imperfect load balancing = 0.000
+12	150	1	19	19	0	Total_time = 198.089	Average extension time = 13.344	Average extension percentage = 4.460	Percentage time wasted due to imperfect load balancing = 6.869
+12	150	1	19	19	0	Total_time = 198.687	Average extension time = 13.239	Average extension percentage = 4.134	Percentage time wasted due to imperfect load balancing = 5.790
+6	150	1	19	19	0	Total_time = 299.614	Average extension time = 9.862	Average extension percentage = 2.667	Percentage time wasted due to imperfect load balancing = 4.279
+6	150	1	19	19	0	Total_time = 709.654	Average extension time = 5.351	Average extension percentage = 0.515	Percentage time wasted due to imperfect load balancing = 1.815
+12	150	1	19	19	0	Total_time = 726.639	Average extension time = 6.438	Average extension percentage = 0.432	Percentage time wasted due to imperfect load balancing = 1.601
+12	150	1	19	19	0	Total_time = 175.862	Average extension time = 7.029	Average extension percentage = 2.055	Percentage time wasted due to imperfect load balancing = 6.276
+//2019-01-22
+// SRR150
+1	150	1	19	19	0	Total_time = 2133.896	Average extension time = 20.492	Average extension percentage = 0.945	Percentage time wasted due to imperfect load balancing = 0.000
+6	150	1	19	19	0	Total_time = 360.279	Average extension time = 5.829	Average extension percentage = 1.128	Percentage time wasted due to imperfect load balancing = 1.314
+8	150	1	19	19	0	Total_time = 278.038	Average extension time = 5.540	Average extension percentage = 1.178	Percentage time wasted due to imperfect load balancing = 1.452
+10	150	1	19	19	0	Total_time = 235.636	Average extension time = 5.643	Average extension percentage = 1.204	Percentage time wasted due to imperfect load balancing = 1.891
+12	150	1	19	19	0	Total_time = 205.265	Average extension time = 5.875	Average extension percentage = 1.214	Percentage time wasted due to imperfect load balancing = 1.810
+1	150	1	19	19	0	Total_time = 2263.854	Average extension time = 21.072	Average extension percentage = 0.918	Percentage time wasted due to imperfect load balancing = 0.000
+2	150	1	19	19	0	Total_time = 1342.713	Average extension time = 16.799	Average extension percentage = 1.206	Percentage time wasted due to imperfect load balancing = 1.265
+4	150	1	19	19	0	Total_time = 694.533	Average extension time = 10.306	Average extension percentage = 1.301	Percentage time wasted due to imperfect load balancing = 2.010
+// SRR250
+12	250	1	19	19	0	Total_time = 847.085	Average extension time = 57.872	Average extension percentage = 6.363	Percentage time wasted due to imperfect load balancing = 3.186
