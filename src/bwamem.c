@@ -1191,13 +1191,13 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 					//curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = 4;
 					curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = 4;
 					/*
-					char tmpval = 4;
-					uint32_t tmp = curr_gpu_batch->n_target_batch;
-					curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
-							curr_gpu_batch->n_target_batch, 
-							tmpval, 
-							TARGET);
-					*/
+					   char tmpval = 4;
+					   uint32_t tmp = curr_gpu_batch->n_target_batch;
+					   curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
+					   curr_gpu_batch->n_target_batch, 
+					   tmpval, 
+					   TARGET);
+					   */
 					//fprintf(stderr, "curr_gpu_batch->n_target_batch goes from %d to %d\n", tmp, curr_gpu_batch->n_target_batch);
 
 
@@ -2339,12 +2339,12 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 							//gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];
 							gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];
 							/*
-							char tmpval = 1;
-							gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
-									gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
-									read_seq[i],
-									QUERY);
-							*/
+							   char tmpval = 1;
+							   gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
+							   gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
+							   read_seq[i],
+							   QUERY);
+							   */
 						}
 						else {
 							fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
@@ -2362,12 +2362,12 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 							// J.L. 2019-01-18 12:40 Emulating non-extensible host memory
 							gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;
 							/*
-							char tmpval = 4;
-							gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
-									gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
-									tmpval, 
-									QUERY);
-							*/
+							   char tmpval = 4;
+							   gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
+							   gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
+							   tmpval, 
+							   QUERY);
+							   */
 						}
 						else {
 							fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);

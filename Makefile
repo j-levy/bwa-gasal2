@@ -3,7 +3,7 @@ CC=gcc
 VPATH=src:obj:lib
 OBJ_DIR=./obj/
 LIB_DIR=./lib/
-CUDA_LIB_DIR=/usr/local/cuda-8.0/lib64/
+CUDA_LIB_DIR=/usr/local/cuda-10.0/lib64/
 GASAL_LIB_DIR = ./GASAL2/lib/
 GASAL_INCLUDE_DIR = ./GASAL2/include/
 #SHD_DIR=./src/shd_filter/
@@ -68,7 +68,7 @@ srr150index: all
 
 
 srr150: all
-		./$(PROG) gase_aln -t 10 -l 150 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+		./$(PROG) gase_aln -g -t 12 -l 150 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
 
 srr250: all
 	./$(PROG) gase_aln -t 12 -l 250 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > /data/work/jlevy/srr/250/res_bwa_gasal2.log
