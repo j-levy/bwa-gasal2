@@ -509,78 +509,78 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 #define flt_lt(a, b) ((a).w > (b).w)
 KSORT_INIT(mem_flt, mem_chain_t, flt_lt)
 
-	int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *a) {
-		int i, k;
-		kvec_t(int)
-			chains = { 0, 0, 0 }; // this keeps int indices of the non-overlapping chains
-		if (n_chn == 0)
-			return 0; // no need to filter
-		// compute the weight of each chain and drop chains with small weight
-		for (i = k = 0; i < n_chn; ++i) {
-			mem_chain_t *c = &a[i];
-			c->first = -1;
-			c->kept = 0;
-			c->w = mem_chain_weight(c);
-			if (c->w < opt->min_chain_weight)
-				free(c->seeds);
-			else
-				a[k++] = *c;
-		}
-		n_chn = k;
-		ks_introsort(mem_flt, n_chn, a);
-		// pairwise chain comparisons
-		a[0].kept = 3;
-		kv_push(int, chains, 0);
-		for (i = 1; i < n_chn; ++i) {
-			int large_ovlp = 0;
-			for (k = 0; k < chains.n; ++k) {
-				int j = chains.a[k];
-				int b_max =
-					chn_beg(a[j]) > chn_beg(a[i]) ? chn_beg(a[j]) : chn_beg(a[i]);
-				int e_min =
-					chn_end(a[j]) < chn_end(a[i]) ? chn_end(a[j]) : chn_end(a[i]);
-				if (e_min > b_max && (!a[j].is_alt || a[i].is_alt)) { // have overlap; don't consider ovlp where the kept chain is ALT while the current chain is primary
-					int li = chn_end(a[i]) - chn_beg(a[i]);
-					int lj = chn_end(a[j]) - chn_beg(a[j]);
-					int min_l = li < lj ? li : lj;
-					if (e_min - b_max >= min_l * opt->mask_level && min_l < opt->max_chain_gap) { // significant overlap
-						large_ovlp = 1;
-						if (a[j].first < 0)
-							a[j].first = i; // keep the first shadowed hit s.t. mapq can be more accurate
-						if (a[i].w < a[j].w * opt->drop_ratio && a[j].w - a[i].w >= opt->min_seed_len << 1)
-							break;
-					}
+int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *a) {
+	int i, k;
+	kvec_t(int)
+		chains = { 0, 0, 0 }; // this keeps int indices of the non-overlapping chains
+	if (n_chn == 0)
+		return 0; // no need to filter
+	// compute the weight of each chain and drop chains with small weight
+	for (i = k = 0; i < n_chn; ++i) {
+		mem_chain_t *c = &a[i];
+		c->first = -1;
+		c->kept = 0;
+		c->w = mem_chain_weight(c);
+		if (c->w < opt->min_chain_weight)
+			free(c->seeds);
+		else
+			a[k++] = *c;
+	}
+	n_chn = k;
+	ks_introsort(mem_flt, n_chn, a);
+	// pairwise chain comparisons
+	a[0].kept = 3;
+	kv_push(int, chains, 0);
+	for (i = 1; i < n_chn; ++i) {
+		int large_ovlp = 0;
+		for (k = 0; k < chains.n; ++k) {
+			int j = chains.a[k];
+			int b_max =
+				chn_beg(a[j]) > chn_beg(a[i]) ? chn_beg(a[j]) : chn_beg(a[i]);
+			int e_min =
+				chn_end(a[j]) < chn_end(a[i]) ? chn_end(a[j]) : chn_end(a[i]);
+			if (e_min > b_max && (!a[j].is_alt || a[i].is_alt)) { // have overlap; don't consider ovlp where the kept chain is ALT while the current chain is primary
+				int li = chn_end(a[i]) - chn_beg(a[i]);
+				int lj = chn_end(a[j]) - chn_beg(a[j]);
+				int min_l = li < lj ? li : lj;
+				if (e_min - b_max >= min_l * opt->mask_level && min_l < opt->max_chain_gap) { // significant overlap
+					large_ovlp = 1;
+					if (a[j].first < 0)
+						a[j].first = i; // keep the first shadowed hit s.t. mapq can be more accurate
+					if (a[i].w < a[j].w * opt->drop_ratio && a[j].w - a[i].w >= opt->min_seed_len << 1)
+						break;
 				}
 			}
-			if (k == chains.n) {
-				kv_push(int, chains, i);
-				a[i].kept = large_ovlp ? 2 : 3;
-			}
 		}
-		for (i = 0; i < chains.n; ++i) {
-			mem_chain_t *c = &a[chains.a[i]];
-			if (c->first >= 0)
-				a[c->first].kept = 1;
+		if (k == chains.n) {
+			kv_push(int, chains, i);
+			a[i].kept = large_ovlp ? 2 : 3;
 		}
-		free(chains.a);
-		for (i = k = 0; i < n_chn; ++i) { // don't extend more than opt->max_chain_extend .kept=1/2 chains
-			if (a[i].kept == 0 || a[i].kept == 3)
-				continue;
-			if (++k >= opt->max_chain_extend)
-				break;
-		}
-		for (; i < n_chn; ++i)
-			if (a[i].kept < 3)
-				a[i].kept = 0;
-		for (i = k = 0; i < n_chn; ++i) { // free discarded chains
-			mem_chain_t *c = &a[i];
-			if (c->kept == 0)
-				free(c->seeds);
-			else
-				a[k++] = a[i];
-		}
-		return k;
 	}
+	for (i = 0; i < chains.n; ++i) {
+		mem_chain_t *c = &a[chains.a[i]];
+		if (c->first >= 0)
+			a[c->first].kept = 1;
+	}
+	free(chains.a);
+	for (i = k = 0; i < n_chn; ++i) { // don't extend more than opt->max_chain_extend .kept=1/2 chains
+		if (a[i].kept == 0 || a[i].kept == 3)
+			continue;
+		if (++k >= opt->max_chain_extend)
+			break;
+	}
+	for (; i < n_chn; ++i)
+		if (a[i].kept < 3)
+			a[i].kept = 0;
+	for (i = k = 0; i < n_chn; ++i) { // free discarded chains
+		mem_chain_t *c = &a[i];
+		if (c->kept == 0)
+			free(c->seeds);
+		else
+			a[k++] = a[i];
+	}
+	return k;
+}
 
 /******************************
  * De-overlap single-end hits *
@@ -601,45 +601,45 @@ KSORT_INIT(mem_ars_hash2, mem_alnreg_t, alnreg_hlt2)
 #define PATCH_MAX_R_BW 0.05f
 #define PATCH_MIN_SC_RATIO 0.90f
 
-	int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, const mem_alnreg_t *a, const mem_alnreg_t *b,
-			int *_w) {
-		int w, score, q_s, r_s;
-		double r;
-		if (bns == 0 || pac == 0 || query == 0)
-			return 0;
-		assert(a->rid == b->rid && a->rb <= b->rb);
-		if (a->rb < bns->l_pac && b->rb >= bns->l_pac)
-			return 0; // on different strands
-		if (a->qb >= b->qb || a->qe >= b->qe || a->re >= b->re)
-			return 0; // not colinear
-		w = (a->re - b->rb) - (a->qe - b->qb); // required bandwidth
-		w = w > 0 ? w : -w; // l = abs(l)
-		r = (double) (a->re - b->rb) / (b->re - a->rb) - (double) (a->qe - b->qb) / (b->qe - a->qb); // relative bandwidth
-		r = r > 0. ? r : -r; // r = fabs(r)
-		if (bwa_verbose >= 4)
-			printf("* potential hit merge between [%d,%d)<=>[%ld,%ld) and [%d,%d)<=>[%ld,%ld), @ %s; w=%d, r=%.4g\n", a->qb, a->qe, (long) a->rb,
-					(long) a->re, b->qb, b->qe, (long) b->rb, (long) b->re, bns->anns[a->rid].name, w, r);
-		if (a->re < b->rb || a->qe < b->qb) { // no overlap on query or on ref
-			if (w > opt->w << 1 || r >= PATCH_MAX_R_BW)
-				return 0; // the bandwidth or the relative bandwidth is too large
-		} else if (w > opt->w << 2 || r >= PATCH_MAX_R_BW * 2)
-			return 0; // more permissive if overlapping on both ref and query
-		// global alignment
-		w += a->w + b->w;
-		w = w < opt->w << 2 ? w : opt->w << 2;
-		if (bwa_verbose >= 4)
-			printf("* test potential hit merge with global alignment; w=%d\n", w);
-		bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w, bns->l_pac, pac, b->qe - a->qb, query + a->qb, a->rb, b->re, &score, 0,
-				0);
-		q_s = (int) ((double) (b->qe - a->qb) / ((b->qe - b->qb) + (a->qe - a->qb)) * (b->score + a->score) + .499); // predicted score from query
-		r_s = (int) ((double) (b->re - a->rb) / ((b->re - b->rb) + (a->re - a->rb)) * (b->score + a->score) + .499); // predicted score from ref
-		if (bwa_verbose >= 4)
-			printf("* score=%d;(%d,%d)\n", score, q_s, r_s);
-		if ((double) score / (q_s > r_s ? q_s : r_s) < PATCH_MIN_SC_RATIO)
-			return 0;
-		*_w = w;
-		return score;
-	}
+int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, const mem_alnreg_t *a, const mem_alnreg_t *b,
+		int *_w) {
+	int w, score, q_s, r_s;
+	double r;
+	if (bns == 0 || pac == 0 || query == 0)
+		return 0;
+	assert(a->rid == b->rid && a->rb <= b->rb);
+	if (a->rb < bns->l_pac && b->rb >= bns->l_pac)
+		return 0; // on different strands
+	if (a->qb >= b->qb || a->qe >= b->qe || a->re >= b->re)
+		return 0; // not colinear
+	w = (a->re - b->rb) - (a->qe - b->qb); // required bandwidth
+	w = w > 0 ? w : -w; // l = abs(l)
+	r = (double) (a->re - b->rb) / (b->re - a->rb) - (double) (a->qe - b->qb) / (b->qe - a->qb); // relative bandwidth
+	r = r > 0. ? r : -r; // r = fabs(r)
+	if (bwa_verbose >= 4)
+		printf("* potential hit merge between [%d,%d)<=>[%ld,%ld) and [%d,%d)<=>[%ld,%ld), @ %s; w=%d, r=%.4g\n", a->qb, a->qe, (long) a->rb,
+				(long) a->re, b->qb, b->qe, (long) b->rb, (long) b->re, bns->anns[a->rid].name, w, r);
+	if (a->re < b->rb || a->qe < b->qb) { // no overlap on query or on ref
+		if (w > opt->w << 1 || r >= PATCH_MAX_R_BW)
+			return 0; // the bandwidth or the relative bandwidth is too large
+	} else if (w > opt->w << 2 || r >= PATCH_MAX_R_BW * 2)
+		return 0; // more permissive if overlapping on both ref and query
+	// global alignment
+	w += a->w + b->w;
+	w = w < opt->w << 2 ? w : opt->w << 2;
+	if (bwa_verbose >= 4)
+		printf("* test potential hit merge with global alignment; w=%d\n", w);
+	bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w, bns->l_pac, pac, b->qe - a->qb, query + a->qb, a->rb, b->re, &score, 0,
+			0);
+	q_s = (int) ((double) (b->qe - a->qb) / ((b->qe - b->qb) + (a->qe - a->qb)) * (b->score + a->score) + .499); // predicted score from query
+	r_s = (int) ((double) (b->re - a->rb) / ((b->re - b->rb) + (a->re - a->rb)) * (b->score + a->score) + .499); // predicted score from ref
+	if (bwa_verbose >= 4)
+		printf("* score=%d;(%d,%d)\n", score, q_s, r_s);
+	if ((double) score / (q_s > r_s ? q_s : r_s) < PATCH_MIN_SC_RATIO)
+		return 0;
+	*_w = w;
+	return score;
+}
 
 int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int n, mem_alnreg_t *a) {
 	int m, i, j;
@@ -706,35 +706,35 @@ int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_
 typedef kvec_t(int)
 	int_v;
 
-	static void mem_mark_primary_se_core(const mem_opt_t *opt, int n, mem_alnreg_t *a, int_v *z) { // similar to the loop in mem_chain_flt()
-		int i, k, tmp;
-		tmp = opt->a + opt->b;
-		tmp = opt->o_del + opt->e_del > tmp ? opt->o_del + opt->e_del : tmp;
-		tmp = opt->o_ins + opt->e_ins > tmp ? opt->o_ins + opt->e_ins : tmp;
-		z->n = 0;
-		kv_push(int, *z, 0);
-		for (i = 1; i < n; ++i) {
-			for (k = 0; k < z->n; ++k) {
-				int j = z->a[k];
-				int b_max = a[j].qb > a[i].qb ? a[j].qb : a[i].qb;
-				int e_min = a[j].qe < a[i].qe ? a[j].qe : a[i].qe;
-				if (e_min > b_max) { // have overlap
-					int min_l = a[i].qe - a[i].qb < a[j].qe - a[j].qb ? a[i].qe - a[i].qb : a[j].qe - a[j].qb;
-					if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
-						if (a[j].sub == 0)
-							a[j].sub = a[i].score;
-						if (a[j].score - a[i].score <= tmp && (a[j].is_alt || !a[i].is_alt))
-							++a[j].sub_n;
-						break;
-					}
+static void mem_mark_primary_se_core(const mem_opt_t *opt, int n, mem_alnreg_t *a, int_v *z) { // similar to the loop in mem_chain_flt()
+	int i, k, tmp;
+	tmp = opt->a + opt->b;
+	tmp = opt->o_del + opt->e_del > tmp ? opt->o_del + opt->e_del : tmp;
+	tmp = opt->o_ins + opt->e_ins > tmp ? opt->o_ins + opt->e_ins : tmp;
+	z->n = 0;
+	kv_push(int, *z, 0);
+	for (i = 1; i < n; ++i) {
+		for (k = 0; k < z->n; ++k) {
+			int j = z->a[k];
+			int b_max = a[j].qb > a[i].qb ? a[j].qb : a[i].qb;
+			int e_min = a[j].qe < a[i].qe ? a[j].qe : a[i].qe;
+			if (e_min > b_max) { // have overlap
+				int min_l = a[i].qe - a[i].qb < a[j].qe - a[j].qb ? a[i].qe - a[i].qb : a[j].qe - a[j].qb;
+				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
+					if (a[j].sub == 0)
+						a[j].sub = a[i].score;
+					if (a[j].score - a[i].score <= tmp && (a[j].is_alt || !a[i].is_alt))
+						++a[j].sub_n;
+					break;
 				}
 			}
-			if (k == z->n)
-				kv_push(int, *z, i);
-			else
-				a[i].secondary = z->a[k];
 		}
+		if (k == z->n)
+			kv_push(int, *z, i);
+		else
+			a[i].secondary = z->a[k];
 	}
+}
 
 int mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id) {
 	int i, n_pri;
@@ -830,8 +830,8 @@ int mem_seed_sw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, i
 	return x.score;
 }
 
-void mem_shd_flt_chained_seeds(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, int n_chn,
-		mem_chain_t *a) {
+void mem_shd_flt_chained_seeds(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, int n_chn, mem_chain_t *a) 
+{
 	int i, j, k;
 	for (i = 0; i < n_chn; ++i) {
 		mem_chain_t *c = &a[i];
@@ -1098,6 +1098,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			w = max_gap < p->w? max_gap : p->w;
 			if (qd - rd < w && rd - qd < w) break;
 		}
+
 		if (i < av->n) { // the seed is (almost) contained in an existing alignment; further testing is needed to confirm it is not leading to a different aln
 			if (bwa_verbose >= 4)
 				printf("** Seed(%d) [%ld;%ld,%ld] is almost contained in an existing alignment [%d,%d) <=> [%ld,%ld)\n",
@@ -1172,15 +1173,15 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			//uint8_t* rs = malloc(rseq_end - rseq_beg);
 			int ref_l_seq_with_p = ((rmax[1] - rmax[0])%8) ? (rmax[1] - rmax[0]) + (8 - ((rmax[1] - rmax[0])%8)) : (rmax[1] - rmax[0]) ;
 			int j;
-			//    	  for (i = 0, j = 0; i < (rmax[1] - rmax[0]) && j < MAX_SEQ_LEN; ++i, ++j) {
-			//    		  //rs[j] = rseq[i];
-			//    		  //kv_push(uint8_t, *ref_seq_batch, rseq[i]);
-			//    		  if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes) curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = rseq[i];
-			//    		  else {
-			//    			  fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
-			//				  exit(EXIT_FAILURE);
-			//    		  }
-			//    	  }
+			   	//   for (i = 0, j = 0; i < (rmax[1] - rmax[0]) && j < MAX_SEQ_LEN; ++i, ++j) {
+			   	// 	  //rs[j] = rseq[i];
+			   	// 	  //kv_push(uint8_t, *ref_seq_batch, rseq[i]);
+			   	// 	  if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes) curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = rseq[i];
+			   	// 	  else {
+			   	// 		  fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
+				// 			  exit(EXIT_FAILURE);
+			   	// 	  }
+			   	//   }
 			int ref_l_seq = rmax[1] - rmax[0];
 			while (ref_l_seq < ref_l_seq_with_p) {
 				//kv_push(uint8_t, *ref_seq_batch, 0);
@@ -1497,7 +1498,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		a->frac_rep = c->frac_rep;
 	}
 	free(srt);
-	}
+}
 
 	//void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av, seq_lens *read_seq_lens, seq_offsets *read_seq_offsets, int *curr_read_offset, seq_batch *ref_seq_batch, seq_lens *ref_seq_lens, seq_offsets *ref_seq_offsets, int *curr_ref_offset)
 	//{
@@ -2215,612 +2216,470 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 	}
 
 	//#define GPU_READ_BATCH_SIZE 1000
-	void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *seq, void *buf, int batch_size, int batch_start_idx, mem_alnreg_v *w_regs, int tid, gasal_gpu_storage_v *gpu_storage_vec) {
-		int j,  r;
-		//extern double *extension_time;
-		extern time_struct *extension_time;
-		extern uint64_t *no_of_extensions;
-		kvec_t(mem_alnreg_v) regs_vec;
-		kv_init(regs_vec);
-		kv_resize(mem_alnreg_v, regs_vec, batch_size);
+void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *seq, void *buf, int batch_size, int batch_start_idx, mem_alnreg_v *w_regs, int tid, gasal_gpu_storage_v *gpu_storage_vec) {
+	int j,  r;
+	//extern double *extension_time;
+	extern time_struct *extension_time;
+	extern uint64_t *no_of_extensions;
+	kvec_t(mem_alnreg_v) regs_vec;
+	kv_init(regs_vec);
+	kv_resize(mem_alnreg_v, regs_vec, batch_size);
 
+	int GPU_READ_BATCH_SIZE;
+	if (batch_size >= 4000) GPU_READ_BATCH_SIZE = 1000;
+	else {
+		GPU_READ_BATCH_SIZE = (int)ceil((double)batch_size/(double)4) % 2 ? (int)ceil((double)batch_size/(double)4) + 1: (int)ceil((double)batch_size/(double)4);
+	}
+	int internal_batch_count = 0;
+	internal_batch_count = (int)ceil(((double)batch_size)/((double)(GPU_READ_BATCH_SIZE)));
+	gpu_batch gpu_batch_arr[gpu_storage_vec->n];
+	for(j = 0; j < gpu_storage_vec->n; j++) {
+		gpu_batch_arr[j].gpu_storage = &(gpu_storage_vec->a[j]);
 
-		// gasal_gpu_storage **gpu_storage_arr = (gasal_gpu_storage*)calloc(10*sizeof(*gasal_gpu_storage));
-		//	struct gpu_batch{
-		//		gasal_gpu_storage_t *gpu_storage;
-		//		int batch_size;
-		//		int batch_start;
-		//		int is_active;
-		//		int no_extend;
-		//	};
-		int GPU_READ_BATCH_SIZE;
-		if (batch_size >= 4000) GPU_READ_BATCH_SIZE = 1000;
-		else {
-			GPU_READ_BATCH_SIZE = (int)ceil((double)batch_size/(double)4) % 2 ? (int)ceil((double)batch_size/(double)4) + 1: (int)ceil((double)batch_size/(double)4);
+	}
+	int internal_batch_done = 0;
+	int batch_processed = 0;
+	//int total_internal_batches = 0;
+	int internal_batch_no = 0;
+	double time_extend;
+
+	while (internal_batch_done < internal_batch_count) {
+		int gpu_batch_arr_idx = 0;
+		while(gpu_batch_arr_idx != gpu_storage_vec->n && gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->is_free != 1) {
+			gpu_batch_arr_idx++;
 		}
-		int internal_batch_count = 0;
-		internal_batch_count = (int)ceil(((double)batch_size)/((double)(GPU_READ_BATCH_SIZE)));
-		gpu_batch gpu_batch_arr[gpu_storage_vec->n];
-		for(j = 0; j < gpu_storage_vec->n; j++) {
-			gpu_batch_arr[j].gpu_storage = &(gpu_storage_vec->a[j]);
 
-		}
-		int internal_batch_done = 0;
-		int batch_processed = 0;
-		//int total_internal_batches = 0;
-		int internal_batch_no = 0;
-		double time_extend;
-		//int internal_batch_size = 1000;//batch_size - batch_processed >= 4000  ? 4000 : batch_size - batch_processed;
-
-		//cudaStream_t streams[internal_batch_count];
-		//fprintf(stderr, "thread no %d with batch size %d and batch count %d\n", tid, batch_size, internal_batch_count);
-		//extern uint64_t *no_of_extensions;
-		//seq_ptr_arr read_seqns;
-		//seq_ptr_arr ref_seqns;
-		//aln_pair read_idx_vec;
-		//kv_init(read_seqns);
-		//kv_resize(uint8_t*, read_seqns, 10*batch_size);
-		//kv_init(ref_seqns);
-		//kv_resize(uint8_t*, ref_seqns, batch_size*10);
-		//seq_lens read_seq_lens;
-		//seq_lens ref_seq_lens;
-		//kv_init(read_seq_lens);
-		//kv_resize(int, read_seq_lens, 10*batch_size);
-		//kv_init(ref_seq_lens);
-		//kv_resize(int, ref_seq_lens, batch_size*10);
-		//kv_init(read_idx_vec);
-		//kv_resize(int, read_idx_vec, n_reads*10);
-		while (internal_batch_done < internal_batch_count) {
-			int gpu_batch_arr_idx = 0;
-			while(gpu_batch_arr_idx != gpu_storage_vec->n && gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->is_free != 1) {
-				gpu_batch_arr_idx++;
-			}
-			//		if (gpu_batch_arr_idx == gpu_storage_vec->n && batch_processed < batch_size) {
-			//			no_of_extensions[tid]++;
-			//		}
-			int internal_batch_start_idx = batch_processed;
-			if (internal_batch_start_idx < batch_size && gpu_batch_arr_idx < gpu_storage_vec->n) {
-
-				//   kvec_t(mem_chain_v) mem_chain_v_vec;
-				//   kv_init(mem_chain_v_vec);
-				//   kv_resize(mem_chain_v, mem_chain_v_vec, n_reads);
-				//read_no++;
-				//fprintf(stderr, "%d\n", read_no);
-				//fflush(stderr);
-				gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = 0;
-				gpu_batch_arr[gpu_batch_arr_idx].n_target_batch = 0;
-				gpu_batch_arr[gpu_batch_arr_idx].n_seqs = 0;
-				int curr_read_offset = 0;
-				int curr_ref_offset = 0;
-				int internal_batch_size = batch_size - batch_processed >= GPU_READ_BATCH_SIZE  ? GPU_READ_BATCH_SIZE : batch_size - batch_processed;
-				//fprintf(stderr, "\tthread no %d with internal_batch_size %d\n", tid, internal_batch_size);
-				//gpu_batch_arr[gpu_batch_arr_idx].gpu_storage = (gasal_gpu_storage_t*)calloc(1, sizeof(gasal_gpu_storage_t));
-				//			seq_batch read_seq_batch;
-				//			kv_init(read_seq_batch);
-				//			kv_resize(uint8_t, read_seq_batch, MAX_BATCH1_LEN * internal_batch_size * 40);
-				//			seq_lens read_seq_lens;
-				//			kv_init(read_seq_lens);
-				//			kv_resize(uint32_t, read_seq_lens, 40*internal_batch_size);
-				//			seq_offsets read_seq_offsets;
-				//			kv_init(read_seq_offsets);
-				//			kv_resize(uint32_t, read_seq_offsets, 40*internal_batch_size);
-				//
-				//			seq_batch ref_seq_batch;
-				//			kv_init(ref_seq_batch);
-				//			kv_resize(uint8_t, ref_seq_batch, MAX_BATCH2_LEN * internal_batch_size * 40);
-				//			seq_lens ref_seq_lens;
-				//			kv_init(ref_seq_lens);
-				//			kv_resize(uint32_t, ref_seq_lens, 40*internal_batch_size);
-				//			seq_offsets ref_seq_offsets;
-				//			kv_init(ref_seq_offsets);
-				//			kv_resize(uint32_t, ref_seq_offsets, 40*internal_batch_size);
-				for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + internal_batch_size; ++j) {
-					mem_chain_v chn;
-					mem_alnreg_v regs;
-					int i;
-					char *read_seq = seq[j].seq;
-					int read_l_seq_with_p = (seq[j].l_seq%8) ? seq[j].l_seq + (8 - (seq[j].l_seq%8)) : seq[j].l_seq ;
-					//uint8_t *read_seq_with_p = (uin8_t*)malloc(read_l_seq_with_p);
-					//				for (i = 0; i < seq[j].l_seq; ++i){ // convert to 2-bit encoding if we have not done so
-					//					read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]];
-					//					kv_push(uint8_t, read_seq_batch, read_seq[i]);
-					//				}
-					//				int read_l_seq = seq[j].l_seq;
-					//				while(read_l_seq < read_l_seq_with_p) {
-					//					kv_push(uint8_t, read_seq_batch, 0);
-					//					read_l_seq++;
-					//				}
-					for (i = 0; i < seq[j].l_seq; ++i){ // convert to 2-bit encoding if we have not done so
-						read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]];
-						if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes) 
-						{
-							// J.L. 2018-12-20 16:23 DONE : add some function to add a single base
-							// J.L. 2019-01-18 12:40 Emulating non-extensible host memory
-							//gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];
-							gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];
-							/*
-							   char tmpval = 1;
-							   gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
-							   gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
-							   read_seq[i],
-							   QUERY);
-							   */
-						}
-						else {
-							fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
-							exit(EXIT_FAILURE);
-						}
-						//kv_push(uint8_t, read_seq_batch, read_seq[i]);
-					}
-					int read_l_seq = seq[j].l_seq;
-					while(read_l_seq < read_l_seq_with_p) {
-						//kv_push(uint8_t, read_seq_batch, 0);
-						if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes)
-						{
-							//gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;
-							// J.L. 2018-12-20 17:00 DONE : add some function to add a single base
-							// J.L. 2019-01-18 12:40 Emulating non-extensible host memory
-							gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;
-							/*
-							   char tmpval = 4;
-							   gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
-							   gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
-							   tmpval, 
-							   QUERY);
-							   */
-						}
-						else {
-							fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
-							exit(EXIT_FAILURE);
-						}
-						read_l_seq++;
-					}
-					//kv_push(int, read_seq_lens, read_l_seq);
-					//kv_push(int, read_seq_offsets, curr_read_offset);
-					//print_seq(read_l_seq, read_seq);
-					//fflush(stderr);
-					//fprintf(stderr, "%d,", j);
-					chn = mem_chain(opt, bwt, bns, seq[j].l_seq, (uint8_t*)(read_seq), buf);
-					chn.n = mem_chain_flt(opt, chn.n, chn.a);
-
-					if (opt->shd_filter) mem_shd_flt_chained_seeds(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), chn.n, chn.a);
-					else mem_flt_chained_seeds(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), chn.n, chn.a);
-					if (bwa_verbose >= 4)
-						mem_print_chain(bns, &chn);
-					/*for (i = 0; i < chn.n; ++i) {
-					  mem_chain_t *c = &chn.a[i];
-					  if (c->n == 0) continue;
-					  uint64_t *srt;
-					  srt = malloc(c->n * 8);
-					  for (i = 0; i < c->n; ++i) srt[i] = (uint64_t)c->seeds[i].score<<32 | i;
-					  ks_introsort_64(c->n, srt);*/
-					kv_init(regs);
-					for (i = 0; i < chn.n; ++i) {
-						mem_chain_t *p = &chn.a[i];
-						if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
-						//mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &read_seq_lens, &read_seq_offsets, &curr_read_offset, &ref_seq_batch, &ref_seq_lens, &ref_seq_offsets, &curr_ref_offset);
-						mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &curr_read_offset, &curr_ref_offset, &gpu_batch_arr[gpu_batch_arr_idx]);
-						free(chn.a[i].seeds);
-					}
-					curr_read_offset += read_l_seq_with_p;
-					free(chn.a);
-					kv_push(mem_alnreg_v, regs_vec, regs);
-
-					//smem_aux_destroy((smem_aux_t*)buf);
-					//buf = smem_aux_init();
-
-				}
+		int internal_batch_start_idx = batch_processed;
+		if (internal_batch_start_idx < batch_size && gpu_batch_arr_idx < gpu_storage_vec->n) {
 
 
+			gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = 0;
+			gpu_batch_arr[gpu_batch_arr_idx].n_target_batch = 0;
+			gpu_batch_arr[gpu_batch_arr_idx].n_seqs = 0;
+			int curr_read_offset = 0;
+			int curr_ref_offset = 0;
+			int internal_batch_size = batch_size - batch_processed >= GPU_READ_BATCH_SIZE  ? GPU_READ_BATCH_SIZE : batch_size - batch_processed;
 
-				if (/*kv_size(ref_seq_lens)*/ gpu_batch_arr[gpu_batch_arr_idx].n_seqs > 0) {
-					//fprintf(stderr, "n_alns on GPU=%d\n", kv_size(ref_seq_lens));
-					//no_of_extensions[tid] += kv_size(ref_seq_lens);
-					no_of_extensions[tid] += gpu_batch_arr[gpu_batch_arr_idx].n_seqs;
-					//				gasal_host_malloc_int32(&(gpu_batch_arr[gpu_batch_arr_idx].max_score), kv_size(ref_seq_lens) * sizeof(int32_t));
-					//				gasal_host_malloc_int32(&(gpu_batch_arr[gpu_batch_arr_idx].read_start), kv_size(ref_seq_lens) * sizeof(int32_t));
-					//				gasal_host_malloc_int32(&(gpu_batch_arr[gpu_batch_arr_idx].read_end), kv_size(ref_seq_lens) * sizeof(int32_t));
-					//				gasal_host_malloc_int32(&(gpu_batch_arr[gpu_batch_arr_idx].ref_start), kv_size(ref_seq_lens) * sizeof(int32_t));
-					//				gasal_host_malloc_int32(&(gpu_batch_arr[gpu_batch_arr_idx].ref_end), kv_size(ref_seq_lens) * sizeof(int32_t));
-					//time_extend = realtime();
-					//gasal_host_malloc_int32(&(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_results), 5 * kv_size(ref_seq_lens) * sizeof(int32_t));
-					//extension_time[tid].host_mem_alloc += (realtime() - time_extend);
+			for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + internal_batch_size; ++j) {
+				mem_chain_v chn;
+				mem_alnreg_v regs;
+				int i;
+				char *read_seq = seq[j].seq;
 
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch = read_seq_batch.a;
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_target_batch = ref_seq_batch.a;
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_query_batch_offsets = read_seq_offsets.a;
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_target_batch_offsets = ref_seq_offsets.a;
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_query_batch_lens = read_seq_lens.a;
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_target_batch_lens = ref_seq_lens.a;
-					//				//gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_aln_score = (int32_t*) malloc(5 * kv_size(ref_seq_lens) * sizeof(int32_t));
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_aln_score = (int32_t*) malloc(kv_size(ref_seq_lens) * sizeof(int32_t));
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_query_batch_start = (int32_t*) malloc(kv_size(ref_seq_lens) * sizeof(int32_t));
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_query_batch_end = (int32_t*) malloc(kv_size(ref_seq_lens) * sizeof(int32_t));
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_target_batch_start = (int32_t*) malloc(kv_size(ref_seq_lens) * sizeof(int32_t));
-					//				gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_target_batch_end = (int32_t*) malloc(kv_size(ref_seq_lens) * sizeof(int32_t));
-					//extension_time[tid] += (realtime() - time_extend);
-					//	 gasal_aln(const uint8_t *query_batch, const uint32_t *query_batch_offsets, const uint32_t *query_batch_lens, const uint8_t *target_batch, const uint32_t *target_batch_offsets, const uint32_t *target_batch_lens, const uint32_t query_batch_bytes, const uint32_t target_batch_bytes, const uint32_t n_alns, int32_t *host_aln_score, int32_t *host_query_batch_start, int32_t *host_target_batch_start, int32_t *host_query_batch_end, int32_t *host_target_batch_end, int algo, int start)
-					// gasal_aln_imp(read_seq_batch.a, read_seq_offsets.a, read_seq_lens.a,  ref_seq_batch.a,  ref_seq_offsets.a, ref_seq_lens.a , kv_size(read_seq_batch), kv_size(ref_seq_batch), kv_size(ref_seq_lens), max_score, read_start, ref_start, read_end, ref_end, LOCAL, WITH_START, gpu_storage);
-					//time_extend = realtime();
-					//gasal_gpu_mem_alloc(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, kv_size(read_seq_batch), kv_size(ref_seq_batch), kv_size(ref_seq_lens), LOCAL, WITH_START);
-					//extension_time[tid].gpu_mem_alloc += (realtime() - time_extend);
-
-					time_extend = realtime();
-					//gasal_aln_async_new(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, kv_size(read_seq_batch), kv_size(ref_seq_batch), kv_size(ref_seq_lens), LOCAL, WITH_START);
-					//J.L. 2018-12-20 17:24 Added params object.
-					Parameters *args;
-					args = new Parameters(0, NULL);
-
-					args->algo = LOCAL;
-					args->start_pos = WITH_START;
-
-					gasal_aln_async(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, gpu_batch_arr[gpu_batch_arr_idx].n_target_batch, gpu_batch_arr[gpu_batch_arr_idx].n_seqs, args);
-					extension_time[tid].aln_kernel += (realtime() - time_extend);
-					gpu_batch_arr[gpu_batch_arr_idx].no_extend = 0;
-				} else {
-					gpu_batch_arr[gpu_batch_arr_idx].no_extend = 1;
-					//fprintf(stderr, "I am here\n");
-					mem_alnreg_v regs = kv_A(regs_vec, kv_size(regs_vec) - 1);
-					fprintf(stderr, "Thread no. %d is here with internal batch size %d, regs.n %d \n", tid, internal_batch_size, regs.n);
-				}
-
-				batch_processed += internal_batch_size;
-				gpu_batch_arr[gpu_batch_arr_idx].batch_size = internal_batch_size;
-				gpu_batch_arr[gpu_batch_arr_idx].batch_start = internal_batch_start_idx;
-				gpu_batch_arr[gpu_batch_arr_idx].is_active = 1;
-				//total_internal_batches++;
-				//gpu_batch_arr_idx++;
-				//			kv_destroy(read_seq_batch);
-				//			kv_destroy(ref_seq_batch);
-				//			kv_destroy(read_seq_lens);
-				//			kv_destroy(ref_seq_lens);
-				//			kv_destroy(read_seq_offsets);
-				//			kv_destroy(ref_seq_offsets);
-				assert(kv_size(regs_vec) == batch_processed);
-				internal_batch_no++;
-				//fprintf(stderr, "internal batch %d launched\n", internal_batch_no++);
-
-				}
-				//fprintf(stderr, "Current extension time of %d seeds on GPU by thread no. %d is %.3f usec\n", kv_size(ref_seq_lens), tid,  extension_time[tid]*1e6);
-				int internal_batch_idx = 0;
-				while (internal_batch_idx != gpu_storage_vec->n) {
-					time_extend = realtime();
-					int x = 0;
-					if (gpu_batch_arr[internal_batch_idx].gpu_storage->is_free != 1) {
-						x = (gasal_is_aln_async_done(gpu_batch_arr[internal_batch_idx].gpu_storage) == 0);
-						//fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d \n", tid, batch_size, internal_batch_count, internal_batch_idx);
-					}
-					if (x) extension_time[tid].get_results_actual += (realtime() - time_extend);
-					else if (gpu_batch_arr[internal_batch_idx].gpu_storage->is_free != 1 && x == 0) extension_time[tid].get_results_wasted += (realtime() - time_extend);
-					//fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d, batches launched=%d, batches done=%d \n", tid, batch_size, internal_batch_count, internal_batch_idx, internal_batch_no, internal_batch_done);
-					//fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is \n");
-					if ((x == 1 || gpu_batch_arr[internal_batch_idx].no_extend == 1) && gpu_batch_arr[internal_batch_idx].is_active == 1)
+				// ===NOTE: filler for the data structure : extensible_host_unpacked_query_batch
+				int read_l_seq_with_p = (seq[j].l_seq%8) ? seq[j].l_seq + (8 - (seq[j].l_seq%8)) : seq[j].l_seq ;
+				for (i = 0; i < seq[j].l_seq; ++i)
+				{ 
+					read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]]; // convert to 2-bit encoding if we have not done so
+					if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes) 
 					{
-						// J.L. 2018-12-21 15:21 changed calls with best score
-						int32_t *max_score = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->aln_score;
-						int32_t *read_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->query_batch_start;
-						int32_t  *read_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->query_batch_end;
-						int32_t *ref_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->target_batch_start;
-						int32_t   *ref_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->target_batch_end;
-
-
-						//				int32_t *max_score = gpu_batch_arr[internal_batch_idx].gpu_storage->host_aln_score;
-						//				int32_t *read_start = &(gpu_batch_arr[internal_batch_idx].gpu_storage->host_aln_score[gpu_batch_arr[internal_batch_idx].gpu_storage->n_alns]);
-						//				int32_t *ref_start = &(gpu_batch_arr[internal_batch_idx].gpu_storage->host_aln_score[2*(gpu_batch_arr[internal_batch_idx].gpu_storage->n_alns)]);
-						//				int32_t  *read_end = &(gpu_batch_arr[internal_batch_idx].gpu_storage->host_aln_score[3*(gpu_batch_arr[internal_batch_idx].gpu_storage->n_alns)]);
-						//				int32_t   *ref_end = &(gpu_batch_arr[internal_batch_idx].gpu_storage->host_aln_score[4*(gpu_batch_arr[internal_batch_idx].gpu_storage->n_alns)]);
-
-						int seq_idx=0;
-						for(j = 0, r = gpu_batch_arr[internal_batch_idx].batch_start; j < gpu_batch_arr[internal_batch_idx].batch_size; ++j, ++r){
-							int i;
-							mem_alnreg_v regs = kv_A(regs_vec, r);
-							//int read_pos = kv_A(read_seq_offsets, j);
-							//int read_len = kv_A(read_seq_lens, j);
-							//uint8_t* read_seq = &(kv_A(read_seq_batch, read_pos));
-							if (gpu_batch_arr[internal_batch_idx].no_extend == 1) fprintf(stderr, "I am here too as well with regs.n %d\n", regs.n);
-							for(i = 0; i < regs.n; ++i){
-								mem_alnreg_t *a = &regs.a[i];
-								//fprintf(stderr, "I am here before\n");
-								//fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
-								//fprintf(stderr, "I am here after\n");
-								if (a->seedlen0 != seq[r].l_seq/*kv_A(read_seq_lens, seq_idx)*/) {
-									//if (gpu_batch_arr[internal_batch_idx].no_extend == 1) fprintf(stderr, "I am here too as well\n");
-									a->score = max_score[seq_idx];
-									a->qb = read_start[seq_idx];
-									a->qe = read_end[seq_idx] + 1;
-									a->rb = ref_start[seq_idx] + a->rseq_beg;
-									a->re = ref_end[seq_idx] + a->rseq_beg + 1;
-									a->truesc = max_score[seq_idx];
-									//fprintf(stderr, "seq_set=%d\tscore=%d\tread_end=%d\tref_end=%d\tread_start=%d\tref_start=%d\n", seq_idx, max_score[seq_idx],
-									//		read_end[seq_idx], ref_end[seq_idx], read_start[seq_idx], ref_start[seq_idx]);
-
-
-									//              uint8_t *rs;
-									//              kswr_t x;
-									//              no_of_extensions[tid]++;
-									//              int read_pos = kv_A(read_seq_offsets, seq_idx);
-									//              int read_len = kv_A(read_seq_lens, seq_idx);
-									//              uint8_t* read_seq = &(kv_A(read_seq_batch, read_pos));
-									//              int ref_pos = kv_A(ref_seq_offsets, seq_idx);
-									//              int ref_len = kv_A(ref_seq_lens, seq_idx);
-									//              uint8_t* ref_seq = &(kv_A(ref_seq_batch, ref_pos));
-									//              x.score = -1, x.te = -1, x.qe = -1, x.qb = -1, x.tb = -1, x.score2 = -1, x.te2 = -1;
-									//              //print_seq(kv_A(read_seq_lens, seq_idx), kv_A(read_seqns, seq_idx));
-									//              //print_seq(kv_A(ref_seq_lens, seq_idx), kv_A(ref_seqns, seq_idx));
-									//              //fflush(stderr);
-									//
-									//              //x = ksw_align2(kv_A(read_seq_lens, seq_idx), kv_A(read_seqns, seq_idx), kv_A(ref_seq_lens, seq_idx), kv_A(ref_seqns, seq_idx), 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, KSW_XSTART, 0,
-									//                //    opt->use_avx2);
-									//              x = ksw_align2(read_len, read_seq, ref_len, ref_seq, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, KSW_XSTART, 0,
-									//              opt->use_avx2);
-									//              if (x.score != -1 && x.te != -1 && x.qe != -1 && x.qb != -1 && x.tb != -1) {
-									//                 a->score = x.score, a->qb = x.qb, a->qe = x.qe + 1, a->rb = x.tb + a->rseq_beg, a->re = x.te + a->rseq_beg + 1, a->truesc =
-									//                       x.score;
-									//              }
-									//              else {
-									//                 fprintf(stderr, "SIMD implementation not working\n");
-									//                 print_seq(read_len, read_seq);
-									//                 print_seq(ref_len, ref_seq);
-									//                 fprintf(stderr, "read_no in the batch = %d with seq_idx = %d but number of read_lens = %d", j, seq_idx, kv_size(ref_seq_lens));
-									//                 fflush(stderr);
-									//                 exit(EXIT_FAILURE);
-									//              }
-									seq_idx++;
-								}
-								//if((a->qe - a->qb) == 865350) {
-								//                  print_seq(read_len, read_seq);
-								//                print_seq(ref_len, ref_seq);
-								//              fflush(stderr);
-								//}
-								//free(kv_A(ref_seqns, seq_idx));
-
-							}
-							regs.n = mem_sort_dedup_patch(opt, bns, pac,(uint8_t*)(seq[r].seq), regs.n, regs.a);
-							if (bwa_verbose >= 4) {
-								err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
-								for (i = 0; i < regs.n; ++i) {
-									mem_alnreg_t *p = &regs.a[i];
-									printf("** %d, [%d,%d) <=> [%ld,%ld)\n", p->score, p->qb, p->qe, (long)p->rb, (long)p->re);
-								}
-							}
-							for (i = 0; i < regs.n; ++i) {
-								mem_alnreg_t *p = &regs.a[i];
-								if (p->rid >= 0 && bns->anns[p->rid].is_alt)
-									p->is_alt = 1;
-								//free(kv_A(read_seqns, i));
-
-							}
-							w_regs[r + batch_start_idx] = regs;
-							//free(regs.a);
-
-						}
-						//kv_destroy(read_seqns);
-						//kv_destroy(ref_seqns);
-						//double time_extend = realtime();
-						//fprintf(stderr, "I am before error\n");
-						//fprintf(stderr, "internal batch %d done\n", internal_batch_done - 1);
-						//if (gpu_batch_arr[internal_batch_idx].no_extend == 0) free(max_score); //free(read_start); free(read_end); free(ref_start); free(ref_end);
-						//fprintf(stderr, "I am after error\n");
-						//
-						//time_extend = realtime();
-						//gasal_host_free_int32(gpu_batch_arr[internal_batch_idx].gpu_storage->host_results);
-						//extension_time[tid].host_mem_free += (realtime() - time_extend);
-						//free(gpu_batch_arr[internal_batch_idx].gpu_storage);
-						//gasal_host_free_int32(max_score); gasal_host_free_int32(read_start); gasal_host_free_int32(read_end); gasal_host_free_int32(ref_start); gasal_host_free_int32(ref_end);
-						//extension_time[tid] += (realtime() - time_extend);
-						gpu_batch_arr[internal_batch_idx].is_active = 0;
-						internal_batch_done++;
-						//fprintf(stderr, "internal batch %d done\n", internal_batch_done - 1);
+						// J.L. 2018-12-20 16:23 DONE : add some function to add a single base
+						// J.L. 2019-01-18 12:40 Emulating non-extensible host memory
+						//gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];
+						gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];
+						/*
+							gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
+																			gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
+																			read_seq[i],
+																			QUERY);
+						*/
 					}
-
-					internal_batch_idx++;
+					else {
+						fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
+						exit(EXIT_FAILURE);
+					}
+					//kv_push(uint8_t, read_seq_batch, read_seq[i]);
 				}
+				// ===NOTE: padder for the data structure : extensible_host_unpacked_query_batch
+				int read_l_seq = seq[j].l_seq;
+				while(read_l_seq < read_l_seq_with_p) {
+					//kv_push(uint8_t, read_seq_batch, 0);
+					if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes)
+					{
+						//gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_unpacked_query_batch[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;
+						// J.L. 2018-12-20 17:00 DONE : add some function to add a single base
+						// J.L. 2019-01-18 12:40 Emulating non-extensible host memory
+						gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;
+						/*
+							gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
+							gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
+							4, 
+							QUERY);
+							*/
+					}
+					else {
+						fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
+						exit(EXIT_FAILURE);
+					}
+					read_l_seq++;
+				}
+
+				// ===NOTE: computing chains, store them in the mem_chain_v chn
+				chn = mem_chain(opt, bwt, bns, seq[j].l_seq, (uint8_t*)(read_seq), buf);
+				chn.n = mem_chain_flt(opt, chn.n, chn.a);
+
+				if (opt->shd_filter) mem_shd_flt_chained_seeds(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), chn.n, chn.a);
+				else mem_flt_chained_seeds(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), chn.n, chn.a);
+				if (bwa_verbose >= 4)
+					mem_print_chain(bns, &chn);
+				/*
+					for (i = 0; i < chn.n; ++i) {
+						mem_chain_t *c = &chn.a[i];
+						if (c->n == 0) continue;
+						uint64_t *srt;
+						srt = malloc(c->n * 8);
+						for (i = 0; i < c->n; ++i) srt[i] = (uint64_t)c->seeds[i].score<<32 | i;
+						ks_introsort_64(c->n, srt);
+					}
+				*/
+
+				// ===NOTE: CHAINS DONE. COMPUTING ALIGNMENT
+
+				kv_init(regs);
+				for (i = 0; i < chn.n; ++i) {
+					mem_chain_t *p = &chn.a[i];
+					if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
+					//mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &read_seq_lens, &read_seq_offsets, &curr_read_offset, &ref_seq_batch, &ref_seq_lens, &ref_seq_offsets, &curr_ref_offset);
+					/* ===NOTE: it seems like in bwa-gasal2, mem_chain2aln has been cut down to compute fewer things. But I don't know WHAT kind of things.
+					    it is probably worth it to modify that part to get back to the previous code partition:
+					   - Simpler mem_align1_core, and more meaningful functions like mem_chain2aln
+					   - Probably create yet another function to call GASAL2 (exactly like ksw_extend2)
+						Note: that function woudln't be integrated in mem_chain2aln because they wouldn't run in the same loop. See how GASAL2 call below is out of the loop call.
+					*/
+					mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &curr_read_offset, &curr_ref_offset, &gpu_batch_arr[gpu_batch_arr_idx]);
+					free(chn.a[i].seeds);
+				}
+				curr_read_offset += read_l_seq_with_p;
+				free(chn.a);
+				kv_push(mem_alnreg_v, regs_vec, regs);
+
+				//smem_aux_destroy((smem_aux_t*)buf);
+				//buf = smem_aux_init();
+
 			}
-			kv_destroy(regs_vec);
-			//fprintf(stderr, "--------------------------------------");
+
+			// ===NOTE: Chains done, mem_chain2aln done (whatever it did)
+			// ===NOTE: now, GASAL2 KERNEL LAUCNH ON BATCH
+
+			if (/*kv_size(ref_seq_lens)*/ gpu_batch_arr[gpu_batch_arr_idx].n_seqs > 0) {
+				//fprintf(stderr, "n_alns on GPU=%d\n", kv_size(ref_seq_lens));
+				//no_of_extensions[tid] += kv_size(ref_seq_lens);
+				no_of_extensions[tid] += gpu_batch_arr[gpu_batch_arr_idx].n_seqs;
+
+				time_extend = realtime();
+				//gasal_aln_async_new(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, kv_size(read_seq_batch), kv_size(ref_seq_batch), kv_size(ref_seq_lens), LOCAL, WITH_START);
+				//J.L. 2018-12-20 17:24 Added params object.
+				Parameters *args;
+				args = new Parameters(0, NULL);
+
+				args->algo = LOCAL;
+				args->start_pos = WITH_START;
+
+				gasal_aln_async(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, gpu_batch_arr[gpu_batch_arr_idx].n_target_batch, gpu_batch_arr[gpu_batch_arr_idx].n_seqs, args);
+				extension_time[tid].aln_kernel += (realtime() - time_extend);
+				gpu_batch_arr[gpu_batch_arr_idx].no_extend = 0;
+			} else {
+				gpu_batch_arr[gpu_batch_arr_idx].no_extend = 1;
+				//fprintf(stderr, "I am here\n");
+				mem_alnreg_v regs = kv_A(regs_vec, kv_size(regs_vec) - 1);
+				fprintf(stderr, "Thread no. %d is here with internal batch size %d, regs.n %d \n", tid, internal_batch_size, regs.n);
+			}
+
+			batch_processed += internal_batch_size;
+			gpu_batch_arr[gpu_batch_arr_idx].batch_size = internal_batch_size;
+			gpu_batch_arr[gpu_batch_arr_idx].batch_start = internal_batch_start_idx;
+			gpu_batch_arr[gpu_batch_arr_idx].is_active = 1;
+
+			assert(kv_size(regs_vec) == batch_processed);
+			internal_batch_no++;
+			//fprintf(stderr, "internal batch %d launched\n", internal_batch_no++);
+
 		}
 
-		mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar) {
-			mem_aln_t a;
-			int i, w2, tmp, qb, qe, NM, score, is_rev, last_sc = -(1 << 30), l_MD;
-			score = 0;
-			int64_t pos, rb, re;
-			uint8_t *query;
+		// ===NOTE: GASAL2 GET RESULT, measure time
 
-			memset(&a, 0, sizeof(mem_aln_t));
-			if (ar == 0 || ar->rb < 0 || ar->re < 0) { // generate an unmapped record
-				a.rid = -1;
-				a.pos = -1;
-				a.flag |= 0x4;
-				return a;
+		//fprintf(stderr, "Current extension time of %d seeds on GPU by thread no. %d is %.3f usec\n", kv_size(ref_seq_lens), tid,  extension_time[tid]*1e6);
+		int internal_batch_idx = 0;
+		while (internal_batch_idx != gpu_storage_vec->n) {
+			time_extend = realtime();
+			int x = 0;
+			if (gpu_batch_arr[internal_batch_idx].gpu_storage->is_free != 1) {
+				x = (gasal_is_aln_async_done(gpu_batch_arr[internal_batch_idx].gpu_storage) == 0);
+				//fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d \n", tid, batch_size, internal_batch_count, internal_batch_idx);
 			}
-			qb = ar->qb, qe = ar->qe;
-			rb = ar->rb, re = ar->re;
-			query = malloc(l_query);
-			for (i = 0; i < l_query; ++i) // convert to the nt4 encoding
-				query[i] = query_[i] < 5 ? query_[i] : nst_nt4_table[(int) query_[i]];
-			a.mapq = ar->secondary < 0 ? mem_approx_mapq_se(opt, ar) : 0;
-			if (ar->secondary >= 0)
-				a.flag |= 0x100; // secondary alignment
-			tmp = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->o_del, opt->e_del);
-			w2 = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->o_ins, opt->e_ins);
-			w2 = w2 > tmp ? w2 : tmp;
-			if (bwa_verbose >= 4)
-				printf("* Band width: inferred=%d, cmd_opt=%d, alnreg=%d\n", w2, opt->w, ar->w);
-			if (w2 > opt->w)
-				w2 = w2 < ar->w ? w2 : ar->w;
-			i = 0;
-			a.cigar = NULL;
-			do {
-				free(a.cigar);
-				w2 = w2 < opt->w << 2 ? w2 : opt->w << 2;
-				a.cigar = bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w2, bns->l_pac, pac, qe - qb, (uint8_t*) &query[qb], rb, re,
-						&score, &a.n_cigar, &NM);
+			if (x) extension_time[tid].get_results_actual += (realtime() - time_extend);
+			else if (gpu_batch_arr[internal_batch_idx].gpu_storage->is_free != 1 && x == 0) extension_time[tid].get_results_wasted += (realtime() - time_extend);
+			//fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d, batches launched=%d, batches done=%d \n", tid, batch_size, internal_batch_count, internal_batch_idx, internal_batch_no, internal_batch_done);
+			//fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is \n");
+			if ((x == 1 || gpu_batch_arr[internal_batch_idx].no_extend == 1) && gpu_batch_arr[internal_batch_idx].is_active == 1)
+			{
+				// J.L. 2018-12-21 15:21 changed calls with best score
+				int32_t *max_score = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->aln_score;
+				int32_t *read_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->query_batch_start;
+				int32_t  *read_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->query_batch_end;
+				int32_t *ref_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->target_batch_start;
+				int32_t   *ref_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->target_batch_end;
 
-				//fprintf(stderr, "in do-while: i=%d, a.cigar=%s, a.n_cigar=%d\n",i,a.cigar, a.n_cigar);
 
-				if (bwa_verbose >= 4)
-					printf("* Final alignment: w2=%d, global_sc=%d, local_sc=%d\n", w2, score, ar->truesc);
-				if (score == last_sc || w2 == opt->w << 2)
-					break; // it is possible that global alignment and local alignment give different scores
-				last_sc = score;
-				w2 <<= 1;
-			} while (++i < 3 && score < ar->truesc - opt->a);
-			/*
-			   a.cigar = bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w2, bns->l_pac, pac, qe - qb, (uint8_t*) &query[qb], rb, re,
-			   &score, &a.n_cigar, &NM);
-			   */
-			if (bwa_verbose >= 4)
-				fprintf(stderr, "* Final alignment: w2=%d, global_sc=%d, local_sc=%d\n", w2, score, ar->truesc);
-			//fflush(stderr);
+				int seq_idx=0;
+				for(j = 0, r = gpu_batch_arr[internal_batch_idx].batch_start; j < gpu_batch_arr[internal_batch_idx].batch_size; ++j, ++r){
+					int i;
+					mem_alnreg_v regs = kv_A(regs_vec, r);
+					//int read_pos = kv_A(read_seq_offsets, j);
+					//int read_len = kv_A(read_seq_lens, j);
+					//uint8_t* read_seq = &(kv_A(read_seq_batch, read_pos));
+					if (gpu_batch_arr[internal_batch_idx].no_extend == 1) fprintf(stderr, "I am here too as well with regs.n %d\n", regs.n);
+					for(i = 0; i < regs.n; ++i){
+						mem_alnreg_t *a = &regs.a[i];
+						//fprintf(stderr, "I am here before\n");
+						//fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
+						//fprintf(stderr, "I am here after\n");
+						if (a->seedlen0 != seq[r].l_seq/*kv_A(read_seq_lens, seq_idx)*/) {
+							//if (gpu_batch_arr[internal_batch_idx].no_extend == 1) fprintf(stderr, "I am here too as well\n");
+							a->score = max_score[seq_idx];
+							a->qb = read_start[seq_idx];
+							a->qe = read_end[seq_idx] + 1;
+							a->rb = ref_start[seq_idx] + a->rseq_beg;
+							a->re = ref_end[seq_idx] + a->rseq_beg + 1;
+							a->truesc = max_score[seq_idx];
+							
+							seq_idx++;
+						}
 
-			l_MD = strlen((char*) (a.cigar + a.n_cigar)) + 1;
 
-			a.NM = NM;
-			pos = bns_depos(bns, rb < bns->l_pac ? rb : re - 1, &is_rev);
-			a.is_rev = is_rev;
-			if (a.n_cigar > 0) { // squeeze out leading or trailing deletions
-				if ((a.cigar[0] & 0xf) == 2) {
-					pos += a.cigar[0] >> 4;
-					--a.n_cigar;
-					memmove(a.cigar, a.cigar + 1, a.n_cigar * 4 + l_MD);
-				} else if ((a.cigar[a.n_cigar - 1] & 0xf) == 2) {
-					--a.n_cigar;
-					memmove(a.cigar + a.n_cigar, a.cigar + a.n_cigar + 1, l_MD); // MD needs to be moved accordingly
+					}
+					regs.n = mem_sort_dedup_patch(opt, bns, pac,(uint8_t*)(seq[r].seq), regs.n, regs.a);
+					if (bwa_verbose >= 4) {
+						err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
+						for (i = 0; i < regs.n; ++i) {
+							mem_alnreg_t *p = &regs.a[i];
+							printf("** %d, [%d,%d) <=> [%ld,%ld)\n", p->score, p->qb, p->qe, (long)p->rb, (long)p->re);
+						}
+					}
+					for (i = 0; i < regs.n; ++i) {
+						mem_alnreg_t *p = &regs.a[i];
+						if (p->rid >= 0 && bns->anns[p->rid].is_alt)
+							p->is_alt = 1;
+						//free(kv_A(read_seqns, i));
+
+					}
+					w_regs[r + batch_start_idx] = regs;
+					//free(regs.a);
+
 				}
+
+				gpu_batch_arr[internal_batch_idx].is_active = 0;
+				internal_batch_done++;
+				//fprintf(stderr, "internal batch %d done\n", internal_batch_done - 1);
 			}
-			if (qb != 0 || qe != l_query) { // add clipping to CIGAR
-				int clip5, clip3;
-				clip5 = is_rev ? l_query - qe : qb;
-				clip3 = is_rev ? qb : l_query - qe;
-				a.cigar = realloc(a.cigar, 4 * (a.n_cigar + 2) + l_MD);
-				if (clip5) {
-					memmove(a.cigar + 1, a.cigar, a.n_cigar * 4 + l_MD); // make room for 5'-end clipping
-					a.cigar[0] = clip5 << 4 | 3;
-					++a.n_cigar;
-				}
-				if (clip3) {
-					memmove(a.cigar + a.n_cigar + 1, a.cigar + a.n_cigar, l_MD); // make room for 3'-end clipping
-					a.cigar[a.n_cigar++] = clip3 << 4 | 3;
-				}
-			}
-			a.rid = bns_pos2rid(bns, pos);
-			assert(a.rid == ar->rid);
-			a.pos = pos - bns->anns[a.rid].offset;
-			a.score = ar->score;
-			a.sub = ar->sub > ar->csub ? ar->sub : ar->csub;
-			a.is_alt = ar->is_alt;
-			a.alt_sc = ar->alt_sc;
-			free(query);
+
+			internal_batch_idx++;
+		}
+	}
+	kv_destroy(regs_vec);
+	//fprintf(stderr, "--------------------------------------");
+}
+
+	mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar) {
+		mem_aln_t a;
+		int i, w2, tmp, qb, qe, NM, score, is_rev, last_sc = -(1 << 30), l_MD;
+		score = 0;
+		int64_t pos, rb, re;
+		uint8_t *query;
+
+		memset(&a, 0, sizeof(mem_aln_t));
+		if (ar == 0 || ar->rb < 0 || ar->re < 0) { // generate an unmapped record
+			a.rid = -1;
+			a.pos = -1;
+			a.flag |= 0x4;
 			return a;
 		}
+		qb = ar->qb, qe = ar->qe;
+		rb = ar->rb, re = ar->re;
+		query = malloc(l_query);
+		for (i = 0; i < l_query; ++i) // convert to the nt4 encoding
+			query[i] = query_[i] < 5 ? query_[i] : nst_nt4_table[(int) query_[i]];
+		a.mapq = ar->secondary < 0 ? mem_approx_mapq_se(opt, ar) : 0;
+		if (ar->secondary >= 0)
+			a.flag |= 0x100; // secondary alignment
+		tmp = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->o_del, opt->e_del);
+		w2 = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->o_ins, opt->e_ins);
+		w2 = w2 > tmp ? w2 : tmp;
+		if (bwa_verbose >= 4)
+			printf("* Band width: inferred=%d, cmd_opt=%d, alnreg=%d\n", w2, opt->w, ar->w);
+		if (w2 > opt->w)
+			w2 = w2 < ar->w ? w2 : ar->w;
+		i = 0;
+		a.cigar = NULL;
+		do {
+			free(a.cigar);
+			w2 = w2 < opt->w << 2 ? w2 : opt->w << 2;
+			a.cigar = bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w2, bns->l_pac, pac, qe - qb, (uint8_t*) &query[qb], rb, re,
+					&score, &a.n_cigar, &NM);
 
-		typedef struct {
-			const mem_opt_t *opt;
-			const bwt_t *bwt;
-			const bntseq_t *bns;
-			const uint8_t *pac;
-			const mem_pestat_t *pes;
-			smem_aux_t **aux;
-			bseq1_t *seqs;
-			mem_alnreg_v *regs;
-			int64_t n_processed;
-		} worker_t;
+			//fprintf(stderr, "in do-while: i=%d, a.cigar=%s, a.n_cigar=%d\n",i,a.cigar, a.n_cigar);
 
-		void worker1(void *data, int i, int tid, int batch_size, int total_reads, gasal_gpu_storage_v *gpu_storage_vec) {
-			worker_t *w = (worker_t*) data;
-			//if (!(w->opt->flag & MEM_F_PE)) {
 			if (bwa_verbose >= 4)
-				printf("=====> Processing read '%s' <=====\n", w->seqs[i].name);
-			//if(i + batch_size >= total_reads) batch_size = total_reads - i;
-			mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs, w->aux[tid], batch_size, i, w->regs, tid, gpu_storage_vec);
-			// } else {
-			//   if (bwa_verbose >= 4)
-			//      printf("=====> Processing read '%s'/1 <=====\n", w->seqs[i << 1 | 0].name);
-			//   w->regs[i << 1 | 0] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i << 1 | 0].l_seq, w->seqs[i << 1 | 0].seq, w->aux[tid]);
-			//   if (bwa_verbose >= 4)
-			//      printf("=====> Processing read '%s'/2 <=====\n", w->seqs[i << 1 | 1].name);
-			//   w->regs[i << 1 | 1] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i << 1 | 1].l_seq, w->seqs[i << 1 | 1].seq, w->aux[tid]);
-			//}
-		}
+				printf("* Final alignment: w2=%d, global_sc=%d, local_sc=%d\n", w2, score, ar->truesc);
+			if (score == last_sc || w2 == opt->w << 2)
+				break; // it is possible that global alignment and local alignment give different scores
+			last_sc = score;
+			w2 <<= 1;
+		} while (++i < 3 && score < ar->truesc - opt->a);
+		/*
+			a.cigar = bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w2, bns->l_pac, pac, qe - qb, (uint8_t*) &query[qb], rb, re,
+			&score, &a.n_cigar, &NM);
+			*/
+		if (bwa_verbose >= 4)
+			fprintf(stderr, "* Final alignment: w2=%d, global_sc=%d, local_sc=%d\n", w2, score, ar->truesc);
+		//fflush(stderr);
 
-		static void worker2(void *data, int i, int tid, int batch_size, int n_reads, gasal_gpu_storage_v *gpu_storage_vec) {
-			extern int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2],
-					mem_alnreg_v a[2]);
-			extern void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a);
-			worker_t *w = (worker_t*) data;
-			if (!(w->opt->flag & MEM_F_PE)) {
-				if (bwa_verbose >= 4)
-					printf("=====> Finalizing read '%s' <=====\n", w->seqs[i].name);
-				mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
-				mem_reg2sam(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
-				free(w->regs[i].a);
-			} else {
-				if (bwa_verbose >= 4)
-					printf("=====> Finalizing read pair '%s' <=====\n", w->seqs[i << 1 | 0].name);
-				mem_sam_pe(w->opt, w->bns, w->pac, w->pes, (w->n_processed >> 1) + i, &w->seqs[i << 1], &w->regs[i << 1]);
-				free(w->regs[i << 1 | 0].a);
-				free(w->regs[i << 1 | 1].a);
+		l_MD = strlen((char*) (a.cigar + a.n_cigar)) + 1;
+
+		a.NM = NM;
+		pos = bns_depos(bns, rb < bns->l_pac ? rb : re - 1, &is_rev);
+		a.is_rev = is_rev;
+		if (a.n_cigar > 0) { // squeeze out leading or trailing deletions
+			if ((a.cigar[0] & 0xf) == 2) {
+				pos += a.cigar[0] >> 4;
+				--a.n_cigar;
+				memmove(a.cigar, a.cigar + 1, a.n_cigar * 4 + l_MD);
+			} else if ((a.cigar[a.n_cigar - 1] & 0xf) == 2) {
+				--a.n_cigar;
+				memmove(a.cigar + a.n_cigar, a.cigar + a.n_cigar + 1, l_MD); // MD needs to be moved accordingly
 			}
 		}
-
-		void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs,
-				const mem_pestat_t *pes0) {
-			worker_t w;
-			mem_pestat_t pes[4];
-			double ctime, rtime;
-			int i;
-			extern double *load_balance_waste_time;
-			extern double total_load_balance_waste_time;
-			ctime = cputime();
-			rtime = realtime();
-			global_bns = bns;
-			w.regs = malloc(n * sizeof(mem_alnreg_v));
-			w.opt = opt;
-			w.bwt = bwt;
-			w.bns = bns;
-			w.pac = pac;
-			w.seqs = seqs;
-			w.n_processed = n_processed;
-			w.pes = &pes[0];
-			w.aux = malloc(opt->n_threads * sizeof(smem_aux_t));
-			for (i = 0; i < opt->n_threads; ++i)
-				w.aux[i] = smem_aux_init();
-
-			kt_for(opt->n_threads, worker1, &w, /*(opt->flag & MEM_F_PE) ? n >> 1 : */n); // find mapping positions
-
-			double min_exit_time = load_balance_waste_time[0];
-			double max_exit_time = load_balance_waste_time[0];
-			for (i = 1; i < opt->n_threads; i++) {
-				if  (load_balance_waste_time[i] < min_exit_time) min_exit_time = load_balance_waste_time[i];
-				if  (load_balance_waste_time[i] > max_exit_time) max_exit_time = load_balance_waste_time[i];
+		if (qb != 0 || qe != l_query) { // add clipping to CIGAR
+			int clip5, clip3;
+			clip5 = is_rev ? l_query - qe : qb;
+			clip3 = is_rev ? qb : l_query - qe;
+			a.cigar = realloc(a.cigar, 4 * (a.n_cigar + 2) + l_MD);
+			if (clip5) {
+				memmove(a.cigar + 1, a.cigar, a.n_cigar * 4 + l_MD); // make room for 5'-end clipping
+				a.cigar[0] = clip5 << 4 | 3;
+				++a.n_cigar;
 			}
-
-			total_load_balance_waste_time += (max_exit_time - min_exit_time);
-
-			for (i = 0; i < opt->n_threads; ++i)
-				smem_aux_destroy(w.aux[i]);
-			free(w.aux);
-			if (opt->flag & MEM_F_PE) { // infer insert sizes if not provided
-				if (pes0)
-					memcpy(pes, pes0, 4 * sizeof(mem_pestat_t)); // if pes0 != NULL, set the insert-size distribution as pes0
-				else
-					mem_pestat(opt, bns->l_pac, n, w.regs, pes); // otherwise, infer the insert size distribution from data
+			if (clip3) {
+				memmove(a.cigar + a.n_cigar + 1, a.cigar + a.n_cigar, l_MD); // make room for 3'-end clipping
+				a.cigar[a.n_cigar++] = clip3 << 4 | 3;
 			}
-			kt_for(opt->n_threads, worker2, &w, (opt->flag & MEM_F_PE) ? n >> 1 : n); // generate alignment
-
-			//	min_exit_time = load_balance_waste_time[0];
-			//	max_exit_time = load_balance_waste_time[0];
-			//
-			//	for (i = 1; i < opt->n_threads; i++) {
-			//	   if  (load_balance_waste_time[i] < min_exit_time) min_exit_time = load_balance_waste_time[i];
-			//	   if  (load_balance_waste_time[i] > max_exit_time) max_exit_time = load_balance_waste_time[i];
-			//	}
-			//
-			//	total_load_balance_waste_time += (max_exit_time - min_exit_time);
-
-			free(w.regs);
-			if (bwa_verbose >= 3)
-				fprintf(stderr, "[M::%s] Processed %d reads in %.3f CPU sec, %.3f real sec\n", __func__, n, cputime() - ctime, realtime() - rtime);
 		}
+		a.rid = bns_pos2rid(bns, pos);
+		assert(a.rid == ar->rid);
+		a.pos = pos - bns->anns[a.rid].offset;
+		a.score = ar->score;
+		a.sub = ar->sub > ar->csub ? ar->sub : ar->csub;
+		a.is_alt = ar->is_alt;
+		a.alt_sc = ar->alt_sc;
+		free(query);
+		return a;
+	}
+
+	typedef struct {
+		const mem_opt_t *opt;
+		const bwt_t *bwt;
+		const bntseq_t *bns;
+		const uint8_t *pac;
+		const mem_pestat_t *pes;
+		smem_aux_t **aux;
+		bseq1_t *seqs;
+		mem_alnreg_v *regs;
+		int64_t n_processed;
+	} worker_t;
+
+	void worker1(void *data, int i, int tid, int batch_size, int total_reads, gasal_gpu_storage_v *gpu_storage_vec) {
+		worker_t *w = (worker_t*) data;
+		//if (!(w->opt->flag & MEM_F_PE)) {
+		if (bwa_verbose >= 4)
+			printf("=====> Processing read '%s' <=====\n", w->seqs[i].name);
+		//if(i + batch_size >= total_reads) batch_size = total_reads - i;
+		mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs, w->aux[tid], batch_size, i, w->regs, tid, gpu_storage_vec);
+		// } else {
+		//   if (bwa_verbose >= 4)
+		//      printf("=====> Processing read '%s'/1 <=====\n", w->seqs[i << 1 | 0].name);
+		//   w->regs[i << 1 | 0] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i << 1 | 0].l_seq, w->seqs[i << 1 | 0].seq, w->aux[tid]);
+		//   if (bwa_verbose >= 4)
+		//      printf("=====> Processing read '%s'/2 <=====\n", w->seqs[i << 1 | 1].name);
+		//   w->regs[i << 1 | 1] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i << 1 | 1].l_seq, w->seqs[i << 1 | 1].seq, w->aux[tid]);
+		//}
+	}
+
+	static void worker2(void *data, int i, int tid, int batch_size, int n_reads, gasal_gpu_storage_v *gpu_storage_vec) {
+		extern int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2],
+				mem_alnreg_v a[2]);
+		extern void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a);
+		worker_t *w = (worker_t*) data;
+		if (!(w->opt->flag & MEM_F_PE)) {
+			if (bwa_verbose >= 4)
+				printf("=====> Finalizing read '%s' <=====\n", w->seqs[i].name);
+			mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
+			mem_reg2sam(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
+			free(w->regs[i].a);
+		} else {
+			if (bwa_verbose >= 4)
+				printf("=====> Finalizing read pair '%s' <=====\n", w->seqs[i << 1 | 0].name);
+			mem_sam_pe(w->opt, w->bns, w->pac, w->pes, (w->n_processed >> 1) + i, &w->seqs[i << 1], &w->regs[i << 1]);
+			free(w->regs[i << 1 | 0].a);
+			free(w->regs[i << 1 | 1].a);
+		}
+	}
+
+
+
+void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs, const mem_pestat_t *pes0) {
+	worker_t w;
+	mem_pestat_t pes[4];
+	double ctime, rtime;
+	int i;
+	extern double *load_balance_waste_time;
+	extern double total_load_balance_waste_time;
+	ctime = cputime();
+	rtime = realtime();
+	global_bns = bns;
+	w.regs = malloc(n * sizeof(mem_alnreg_v));
+	w.opt = opt;
+	w.bwt = bwt;
+	w.bns = bns;
+	w.pac = pac;
+	w.seqs = seqs;
+	w.n_processed = n_processed;
+	w.pes = &pes[0];
+	w.aux = malloc(opt->n_threads * sizeof(smem_aux_t));
+	for (i = 0; i < opt->n_threads; ++i)
+		w.aux[i] = smem_aux_init();
+
+	kt_for(opt->n_threads, worker1, &w, /*(opt->flag & MEM_F_PE) ? n >> 1 : */n); // find mapping positions
+
+	double min_exit_time = load_balance_waste_time[0];
+	double max_exit_time = load_balance_waste_time[0];
+	for (i = 1; i < opt->n_threads; i++) {
+		if  (load_balance_waste_time[i] < min_exit_time) min_exit_time = load_balance_waste_time[i];
+		if  (load_balance_waste_time[i] > max_exit_time) max_exit_time = load_balance_waste_time[i];
+	}
+
+	total_load_balance_waste_time += (max_exit_time - min_exit_time);
+
+	for (i = 0; i < opt->n_threads; ++i)
+		smem_aux_destroy(w.aux[i]);
+	free(w.aux);
+	if (opt->flag & MEM_F_PE) { // infer insert sizes if not provided
+		if (pes0)
+			memcpy(pes, pes0, 4 * sizeof(mem_pestat_t)); // if pes0 != NULL, set the insert-size distribution as pes0
+		else
+			mem_pestat(opt, bns->l_pac, n, w.regs, pes); // otherwise, infer the insert size distribution from data
+	}
+	kt_for(opt->n_threads, worker2, &w, (opt->flag & MEM_F_PE) ? n >> 1 : n); // generate alignment
+	/*
+		min_exit_time = load_balance_waste_time[0];
+		max_exit_time = load_balance_waste_time[0];
+		for (i = 1; i < opt->n_threads; i++) {
+		   if  (load_balance_waste_time[i] < min_exit_time) min_exit_time = load_balance_waste_time[i];
+		   if  (load_balance_waste_time[i] > max_exit_time) max_exit_time = load_balance_waste_time[i];
+		}
+		total_load_balance_waste_time += (max_exit_time - min_exit_time);
+	*/
+	free(w.regs);
+	if (bwa_verbose >= 3)
+		fprintf(stderr, "[M::%s] Processed %d reads in %.3f CPU sec, %.3f real sec\n", __func__, n, cputime() - ctime, realtime() - rtime);
+}
 
