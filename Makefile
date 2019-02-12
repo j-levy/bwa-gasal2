@@ -37,7 +37,7 @@ LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
 
-VALGRIND=
+VALGRIND=valgrind
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
 
 ifeq ($(shell uname -s),Linux)
@@ -59,6 +59,13 @@ endif
 #.cu.o:
 #		 nvcc -c $(NVCCFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$(notdir $@)
 
+
+short-index: all 
+		./$(PROG) index /data/work/jlevy/hg19_short/chr01.fasta
+
+short: all
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 150 /data/work/jlevy/hg19_short/chr01.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
+
 20k: all
 		./$(PROG) index fasta/target_batch.fasta
 		./$(PROG) gase_aln -v 4 -l 150 fasta/target_batch.fasta fasta/query_batch.fasta > res.log
@@ -75,11 +82,6 @@ srr250: all
 
 srr150nvprof: all
 	nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof ./$(PROG) gase_aln -t 12 -l 150 /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
-
-
-short: clean all
-		./$(PROG) index fasta/short_target_batch.fasta
-		./$(PROG) gase_aln -v 4 -l 150 fasta/short_target_batch.fasta fasta/short_query_batch.fasta > res.log
 
 clean-db: all
 		rm /data/work/jlevy/srr/150/*.fasta.*
