@@ -1234,7 +1234,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				ref_l_seq++;
 			}
 			a->rseq_beg = rmax[0] /*+ rseq_beg*/;
-
+			if (bwa_verbose >= 4)
+				err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long) s->len, (long) s->qbeg, (long) s->rbeg, bns->anns[c->rid].name);
            
 
 			if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
@@ -1663,6 +1664,48 @@ void  print_seq(int length, uint8_t* seq){
     fprintf(stderr,"\n");
 }
 
+void mem_gasal_fill(gpu_batch *gpu_batch_arr, int gpu_batch_arr_idx, int read_l_seq, char *read_seq, int read_l_seq_with_p)
+{
+	 // ===NOTE: filler for the data structure : extensible_host_unpacked_query_batch
+	int i;
+	for (i = 0; i < read_l_seq; ++i)
+	{ 
+		read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]]; // convert to 2-bit encoding if we have not done so
+		if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes) 
+		{
+			// J.L. 2018-12-20 16:23 DONE : add some function to add a single base
+			// J.L. 2019-01-18 12:40 Emulating non-extensible host memory: gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];                      
+			gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
+																gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
+																read_seq[i],
+																QUERY);
+		} else {
+			fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
+			exit(EXIT_FAILURE);
+		}
+		//kv_push(uint8_t, read_seq_batch, read_seq[i]);
+	}
+	// ===NOTE: padder for the data structure : extensible_host_unpacked_query_batch
+	
+	while(read_l_seq < read_l_seq_with_p) {
+		//kv_push(uint8_t, read_seq_batch, 0);
+		if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes)
+		{
+			// J.L. 2018-12-20 17:00 DONE : add some function to add a single base
+			// J.L. 2019-01-18 12:40 Emulating non-extensible host memory : gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;                        
+			gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
+																gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
+																4, 
+																QUERY);   
+		}
+		else {
+			fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
+			exit(EXIT_FAILURE);
+		}
+		read_l_seq++;
+	}
+}
+
 //#define GPU_READ_BATCH_SIZE 1000
 void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *seq, void *buf, int batch_size, int batch_start_idx, mem_alnreg_v *w_regs, int tid, gasal_gpu_storage_v *gpu_storage_vec) {
     int j,  r;
@@ -1681,11 +1724,12 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     int internal_batch_count = 0;
     internal_batch_count = (int)ceil(((double)batch_size)/((double)(GPU_READ_BATCH_SIZE)));
     gpu_batch gpu_batch_arr[gpu_storage_vec->n];
+
     for(j = 0; j < gpu_storage_vec->n; j++) {
         gpu_batch_arr[j].gpu_storage = &(gpu_storage_vec->a[j]);
-
     }
-    int internal_batch_done = 0;
+    
+	int internal_batch_done = 0;
     int batch_processed = 0;
     //int total_internal_batches = 0;
     int internal_batch_no = 0;
@@ -1698,9 +1742,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         }
 
         int internal_batch_start_idx = batch_processed;
-        if (internal_batch_start_idx < batch_size && gpu_batch_arr_idx < gpu_storage_vec->n) {
-
-
+        if (internal_batch_start_idx < batch_size && gpu_batch_arr_idx < gpu_storage_vec->n) 
+		{
             gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = 0;
             gpu_batch_arr[gpu_batch_arr_idx].n_target_batch = 0;
             gpu_batch_arr[gpu_batch_arr_idx].n_seqs = 0;
@@ -1708,51 +1751,16 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             int curr_ref_offset = 0;
             int internal_batch_size = batch_size - batch_processed >= GPU_READ_BATCH_SIZE  ? GPU_READ_BATCH_SIZE : batch_size - batch_processed;
 
-            for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + internal_batch_size; ++j) {
+            for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + internal_batch_size; ++j) 
+			{
                 mem_chain_v chn;
                 mem_alnreg_v regs;
                 int i;
                 char *read_seq = seq[j].seq;
+				int read_l_seq = seq[j].l_seq;
+				int read_l_seq_with_p = (read_l_seq%8) ? read_l_seq + (8 - (read_l_seq%8)) : read_l_seq ;
 
-                // ===NOTE: filler for the data structure : extensible_host_unpacked_query_batch
-                int read_l_seq_with_p = (seq[j].l_seq%8) ? seq[j].l_seq + (8 - (seq[j].l_seq%8)) : seq[j].l_seq ;
-                for (i = 0; i < seq[j].l_seq; ++i)
-                { 
-                    read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]]; // convert to 2-bit encoding if we have not done so
-                    if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes) 
-                    {
-                        // J.L. 2018-12-20 16:23 DONE : add some function to add a single base
-                        // J.L. 2019-01-18 12:40 Emulating non-extensible host memory: gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]=read_seq[i];                      
-                        gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
-                                                                            gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
-                                                                            read_seq[i],
-                                                                            QUERY);
-                    }
-                    else {
-                        fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
-                        exit(EXIT_FAILURE);
-                    }
-                    //kv_push(uint8_t, read_seq_batch, read_seq[i]);
-                }
-                // ===NOTE: padder for the data structure : extensible_host_unpacked_query_batch
-                int read_l_seq = seq[j].l_seq;
-                while(read_l_seq < read_l_seq_with_p) {
-                    //kv_push(uint8_t, read_seq_batch, 0);
-                    if (gpu_batch_arr[gpu_batch_arr_idx].n_query_batch < gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes)
-                    {
-                        // J.L. 2018-12-20 17:00 DONE : add some function to add a single base
-                        // J.L. 2019-01-18 12:40 Emulating non-extensible host memory : gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->extensible_host_unpacked_query_batch->data[gpu_batch_arr[gpu_batch_arr_idx].n_query_batch++]= 4;                        
-                        gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_addbase(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, 
-                                                                            gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, 
-                                                                            4, 
-                                                                            QUERY);   
-                    }
-                    else {
-                        fprintf(stderr, "The size of host query_batch (%d) exceeds the allocation (%d)\n", gpu_batch_arr[gpu_batch_arr_idx].n_query_batch + 1, gpu_batch_arr[gpu_batch_arr_idx].gpu_storage->host_max_query_batch_bytes);
-                        exit(EXIT_FAILURE);
-                    }
-                    read_l_seq++;
-                }
+               	mem_gasal_fill(gpu_batch_arr, gpu_batch_arr_idx, read_l_seq, read_seq, read_l_seq_with_p);
 
                 // ===NOTE: computing chains, store them in the mem_chain_v chn
                 chn = mem_chain(opt, bwt, bns, seq[j].l_seq, (uint8_t*)(read_seq), buf);
@@ -1784,8 +1792,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                         it is probably worth it to modify that part to get back to the previous code partition:
                         - Simpler mem_align1_core, and more meaningful functions like mem_chain2aln
                         - Probably create yet another function to call GASAL2 (exactly like ksw_extend2)
-Note: that function woudln't be integrated in mem_chain2aln because they wouldn't run in the same loop. See how GASAL2 call below is out of the loop call.
-*/
+				Note: that function woudln't be integrated in mem_chain2aln because they wouldn't run in the same loop. See how GASAL2 call below is out of the loop call.
+				*/
                     mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &curr_read_offset, &curr_ref_offset, &gpu_batch_arr[gpu_batch_arr_idx]);
                     free(chn.a[i].seeds);
                 }
@@ -1805,7 +1813,6 @@ Note: that function woudln't be integrated in mem_chain2aln because they wouldn'
                 no_of_extensions[tid] += gpu_batch_arr[gpu_batch_arr_idx].n_seqs;
 
                 time_extend = realtime();
-                //gasal_aln_async_new(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, kv_size(read_seq_batch), kv_size(ref_seq_batch), kv_size(ref_seq_lens), LOCAL, WITH_START);
                 //J.L. 2018-12-20 17:24 Added params object.
                 Parameters *args;
                 args = new Parameters(0, NULL);
