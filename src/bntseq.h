@@ -79,8 +79,18 @@ typedef struct {
 		int no_extend;
 		//int32_t *max_score, *read_start, *read_end, *ref_start, *ref_end;
 		int n_query_batch, n_target_batch, n_seqs;
-	}gpu_batch;
+}gpu_batch;
 
+typedef struct {
+		gasal_gpu_storage_t *gpu_storage_left;
+		gasal_gpu_storage_t *gpu_storage_right;
+		int batch_size;
+		int batch_start;
+		int is_active;
+		int no_extend;
+		//int32_t *max_score, *read_start, *read_end, *ref_start, *ref_end;
+		int n_query_batch, n_target_batch, n_seqs;
+} gpu_batch_left_right;
 
 #ifdef __cplusplus
 extern "C" {
