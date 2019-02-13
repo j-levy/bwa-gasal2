@@ -957,7 +957,11 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
                break;
          }
       }
+      /* This is defining from where to start the next row and where to end the computation of next row
+         it skips some of the cells in the beginning and in the end of the row
+      */
       // update beg and end for the next round
+      // COULD be done over a constant value...
       for (j = beg; LIKELY(j < end) && eh[j].h == 0 && eh[j].e == 0; ++j)
          ;
       beg = j;

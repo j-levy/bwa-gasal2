@@ -69,6 +69,8 @@ typedef struct {
 	int qb_est, qe_est;
 	int64_t rseq_beg;
 	int rid;        // reference seq ID
+	int score_left; // left-alignment score
+	int score_right;// right-alignment score: these scores must be explicit now because the alignments might be done in parallel
 	int score;      // best local SW score
 	int truesc;     // actual score corresponding to the aligned region; possibly smaller than $score
 	int sub;        // 2nd best SW score
