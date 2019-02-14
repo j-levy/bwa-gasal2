@@ -1728,7 +1728,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     }
     int internal_batch_count = 0;
     internal_batch_count = (int)ceil(((double)batch_size)/((double)(GPU_READ_BATCH_SIZE)));
-    gpu_batch gpu_batch__asym_arr[gpu_storage_vec->n];
+    gpu_batch gpu_batch_arr[gpu_storage_vec->n];
 
     for(j = 0; j < gpu_storage_vec->n; j++) {
         gpu_batch_arr[j].gpu_storage = &(gpu_storage_vec->a[j]);
