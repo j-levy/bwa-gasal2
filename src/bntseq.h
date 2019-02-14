@@ -81,16 +81,32 @@ typedef struct {
 		int n_query_batch, n_target_batch, n_seqs;
 }gpu_batch;
 
+/* 
+    In this data structure, all sequences that must be aligned must be processed in two steps: Left alignment, and right alignment. 
+    The best optimization would be to sort the alignment lengths, to process alignments with similar lengths in the same warp (avoid thread divergence)
+    But doing so, one would need to sort either in advance, or to keep track of every sequence number.
+    This would be needed to find back which sequence aligment is which (number, left/right) to sum the partial results.
+
+    To keep the programming model simple, I decided to split the calculation into two batches: long, and short.
+    When computing a seed, usually it's not centered, there's one side that is longer than the other.
+    So keeping the sequences ordered, I can decided on which batch to put the "long" part, and I'll put the "short" one on the other.
+    The difference between shortest and longest will be reduced by half. (At worst, a seed is in the middle, making both ends the same length).
+    You could see it as a "free optimization" (at least, with very little cost in terms of bookkeeping).
+
+    The good news is, I don't need to actually care which one is the left and which one is the right. I'll just add the partial results, period.
+
+    Note that, for the moment, I can program it freely as "short=left" and "long=right" if needed. But the names would be confusing.
+*/
 typedef struct {
-		gasal_gpu_storage_t *gpu_storage_left;
-		gasal_gpu_storage_t *gpu_storage_right;
+		gasal_gpu_storage_t *gpu_storage_short;
+		gasal_gpu_storage_t *gpu_storage_long;
 		int batch_size;
 		int batch_start;
 		int is_active;
 		int no_extend;
 		//int32_t *max_score, *read_start, *read_end, *ref_start, *ref_end;
 		int n_query_batch, n_target_batch, n_seqs;
-} gpu_batch_left_right;
+} gpu_batch_asym;
 
 #ifdef __cplusplus
 extern "C" {

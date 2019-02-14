@@ -1728,7 +1728,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     }
     int internal_batch_count = 0;
     internal_batch_count = (int)ceil(((double)batch_size)/((double)(GPU_READ_BATCH_SIZE)));
-    gpu_batch gpu_batch_arr[gpu_storage_vec->n];
+    gpu_batch gpu_batch__asym_arr[gpu_storage_vec->n];
 
     for(j = 0; j < gpu_storage_vec->n; j++) {
         gpu_batch_arr[j].gpu_storage = &(gpu_storage_vec->a[j]);
@@ -1739,6 +1739,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     //int total_internal_batches = 0;
     int internal_batch_no = 0;
     double time_extend;
+
+    //fprintf(stderr, "[ALIGN1_CORE INFO] gpu_storage_vec->n =%d, internal_batch_count=%d, GPU_READ_BATCH_SIZE=%d\n", gpu_storage_vec->n, internal_batch_count, GPU_READ_BATCH_SIZE);
 
     while (internal_batch_done < internal_batch_count) {
         int gpu_batch_arr_idx = 0;
@@ -1756,7 +1758,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             int curr_ref_offset = 0;
             int internal_batch_size = batch_size - batch_processed >= GPU_READ_BATCH_SIZE  ? GPU_READ_BATCH_SIZE : batch_size - batch_processed;
 
-            for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + internal_batch_size; ++j) 
+            for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + internal_batch_size; ++j)
 			{
                 mem_chain_v chn;
                 mem_alnreg_v regs;
@@ -1890,11 +1892,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     if (gpu_batch_arr[internal_batch_idx].no_extend == 1) fprintf(stderr, "I am here too as well with regs.n %d\n", regs.n);
                     for(i = 0; i < regs.n; ++i){
                         mem_alnreg_t *a = &regs.a[i];
-                        //fprintf(stderr, "I am here before\n");
                         //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
-                        //fprintf(stderr, "I am here after\n");
                         if (a->seedlen0 != seq[r].l_seq/*kv_A(read_seq_lens, seq_idx)*/) {
-                            //if (gpu_batch_arr[internal_batch_idx].no_extend == 1) fprintf(stderr, "I am here too as well\n");
                             a->score = max_score[seq_idx];
                             a->qb = read_start[seq_idx];
                             a->qe = read_end[seq_idx] + 1;
