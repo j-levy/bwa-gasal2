@@ -106,7 +106,7 @@ typedef struct {
 		int no_extend;
 		//int32_t *max_score, *read_start, *read_end, *ref_start, *ref_end;
 		int n_query_batch, n_target_batch, n_seqs;
-} gpu_batch_asym;
+} gpu_batch_asym_t;
 
 #ifdef __cplusplus
 extern "C" {

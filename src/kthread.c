@@ -140,78 +140,85 @@ static inline long steal_work(kt_for_t *t)
 int threads_available;
 static void *ktf_worker(void *data)
 {
-   extern void worker1(void *data, int i, int tid, int batch_size, int total_reads, gasal_gpu_storage_v *gpu_storage_vec);
-   ktf_worker_t *w = (ktf_worker_t*)data;
-   int i;
-   extern double *load_balance_waste_time;
-//   gasal_gpu_storage gpu_storage;
-//   gpu_storage.max_batch1_bytes = READ_BATCH_SIZE*40*300;
-//   gpu_storage.max_batch2_bytes = READ_BATCH_SIZE*40*600;
-//   gpu_storage.max_n_alns = READ_BATCH_SIZE*40;
+    extern void worker1(void *data, int i, int tid, int batch_size, int total_reads, gasal_gpu_storage_v *gpu_storage_vec);
+    ktf_worker_t *w = (ktf_worker_t*)data;
+    int i;
+    extern double *load_balance_waste_time;
 
-//   gasal_aln_imp_mem_alloc(&gpu_storage, LOCAL, WITH_START);
+    //   gasal_gpu_storage gpu_storage;
+    //   gpu_storage.max_batch1_bytes = READ_BATCH_SIZE*40*300;
+    //   gpu_storage.max_batch2_bytes = READ_BATCH_SIZE*40*600;
+    //   gpu_storage.max_n_alns = READ_BATCH_SIZE*40;
 
-   extern gasal_gpu_storage_v *gpu_storage_vec_arr;
-   gasal_gpu_storage_v gpu_storage_vec = gpu_storage_vec_arr[w - w->t->w];
-   int READ_BATCH_SIZE;
-   for (;;) {
-      if(w->t->func == &worker1){
-    	 //READ_BATCH_SIZE = (int)ceil((double)w->orig_read_batch_size/(double)(threads_available + 1)) % 2 ?  (int)ceil((double)w->orig_read_batch_size/(double)(threads_available + 1)) + 1 :  (int)ceil((double)w->orig_read_batch_size/(double)(threads_available + 1));
-    	 if(w->n_done >= w->n_per_thread) break;
-    	 if ((w->n_per_thread - w->n_done) <= 1600) READ_BATCH_SIZE = (w->n_per_thread - w->n_done);
-    	 else READ_BATCH_SIZE = (int)ceil((double)(w->n_per_thread - w->n_done)/(double)(threads_available + 1)) % 2 ?  (int)ceil((double)(w->n_per_thread - w->n_done)/(double)(threads_available + 1)) + 1 :  (int)ceil((double)(w->n_per_thread - w->n_done)/(double)(threads_available + 1));
-    	 READ_BATCH_SIZE = READ_BATCH_SIZE > w->orig_read_batch_size ? w->orig_read_batch_size : READ_BATCH_SIZE;
-    	 READ_BATCH_SIZE = READ_BATCH_SIZE < 1000 ? 1000 : READ_BATCH_SIZE;
-         i = __sync_fetch_and_add(&w->i, (READ_BATCH_SIZE));
-         if (i >= w->t->n || i >= ((w - w->t->w) + 1)*w->n_per_thread ) break;
-         __sync_add_and_fetch(&(w->n_done), (READ_BATCH_SIZE));
-         int actual_batch_size =  i + READ_BATCH_SIZE >=  ((w - w->t->w) + 1)*w->n_per_thread ? ((w - w->t->w) + 1)*w->n_per_thread - i : READ_BATCH_SIZE;
-         actual_batch_size = i + actual_batch_size >= w->t->n ? w->t->n - i : actual_batch_size;
+    //   gasal_aln_imp_mem_alloc(&gpu_storage, LOCAL, WITH_START);
 
-         w->t->func(w->t->data, i, w - w->t->w, actual_batch_size, w->t->n, &gpu_storage_vec);
-      }
-      else {
-         i = __sync_fetch_and_add(&w->i, w->t->n_threads);
-         if (i >= w->t->n) break;
-         w->t->func(w->t->data, i, w - w->t->w, READ_BATCH_SIZE, w->t->n, &gpu_storage_vec);
-      }
-   }
-   //is_thread_available[w - w->t->w] = 1;
-   if(w->t->func == &worker1){
-	   __sync_add_and_fetch(&(threads_available), 1);
-	   int min_i;
-	   //fprintf(stderr, "Threads available = %d\n", threads_available);
-	   while ((min_i = steal_work(w->t)) >= 0){
-		   //is_thread_available[w - w->t->w] = 0;
-		   //if(w->t->func == &worker1) fprintf(stderr, "thread no. %d is here processing i %d to %d\n", w - w->t->w, i, i + READ_BATCH_SIZE);
-		   //READ_BATCH_SIZE = (int)ceil((double)w->t->w[min_i].orig_read_batch_size/(double)(threads_available + 1)) % 2 ?  (int)ceil((double)w->t->w[min_i].orig_read_batch_size/(double)(threads_available + 1)) + 1 :  (int)ceil((double)w->t->w[min_i].orig_read_batch_size/(double)(threads_available + 1));
-		   if(w->t->w[min_i].n_done >= w->t->w[min_i].n_per_thread) break;
-		   if ((w->t->w[min_i].n_per_thread - w->t->w[min_i].n_done) <= 1600) READ_BATCH_SIZE = w->t->w[min_i].n_per_thread - w->t->w[min_i].n_done;
-		   else READ_BATCH_SIZE = (int)ceil((double)(w->t->w[min_i].n_per_thread - w->t->w[min_i].n_done)/(double)(threads_available + 1)) % 2 ?  (int)ceil((double)(w->t->w[min_i].n_per_thread - w->t->w[min_i].n_done)/(double)(threads_available + 1)) + 1 :  (int)ceil((double)(w->t->w[min_i].n_per_thread - w->t->w[min_i].n_done)/(double)(threads_available + 1));
-		   READ_BATCH_SIZE = READ_BATCH_SIZE > w->t->w[min_i].orig_read_batch_size ? w->t->w[min_i].orig_read_batch_size : READ_BATCH_SIZE;
-		   READ_BATCH_SIZE = READ_BATCH_SIZE < 1000 ? 1000 : READ_BATCH_SIZE;
-		   i = __sync_fetch_and_add(&(w->t->w[min_i].i), (READ_BATCH_SIZE));
-		   if (i >= w->t->n || i >= (min_i + 1)*w->t->w[min_i].n_per_thread) break;
-		   __sync_add_and_fetch(&(w->t->w[min_i].n_done), (READ_BATCH_SIZE));
-		   int actual_batch_size =  (i + READ_BATCH_SIZE) >=  ((min_i + 1)*w->t->w[min_i].n_per_thread) ? ((min_i + 1)*w->t->w[min_i].n_per_thread) - i: READ_BATCH_SIZE;
-		   actual_batch_size = (i + actual_batch_size) >= w->t->n ? w->t->n - i: actual_batch_size;
-		   //fprintf(stderr, "Thread %d is doing a batch of %d on the behalf of thread %d\n", w - w->t->w, actual_batch_size, min_i);
-		   w->t->func(w->t->data, i, w - w->t->w, actual_batch_size, w->t->n, &gpu_storage_vec);
 
-	   }
-   }
-   else {
-	   while ((i = steal_work(w->t)) >= 0){
-		   //is_thread_available[w - w->t->w] = 0;
-		   //if(w->t->func == &worker1) fprintf(stderr, "thread no. %d is here processing i %d to %d\n", w - w->t->w, i, i + READ_BATCH_SIZE);
-		   w->t->func(w->t->data, i, w - w->t->w, READ_BATCH_SIZE, w->t->n, &gpu_storage_vec);
-	   }
-   }
+    // J.L. 2019-02-14 16:41 we created TWICE as many gpu_storage_vec, we pass them by pair (hence the 2*() and 2*()+1)
+    // this way, we send directly the address of the tuple "gpu_storage_vec_twice" with both the gpu_storage_vec for long and short (each one having 2 streams)
+    extern gasal_gpu_storage_v *gpu_storage_vec_arr;
+    gasal_gpu_storage_v gpu_storage_vec_twice[2];
+    gpu_storage_vec_twice[0] = gpu_storage_vec_arr[2 * (w - w->t->w)];
+    gpu_storage_vec_twice[1] = gpu_storage_vec_arr[2 * (w - w->t->w) + 1];
 
-   //gasal_aln_imp_mem_free(&gpu_storage);
-   //if(w->t->func == &worker1) fprintf (stderr, "Thread %d exits at %.3f secs\n", w - w->t->w, realtime());
-   if(w->t->func == &worker1) load_balance_waste_time[w - w->t->w] = realtime();
-   pthread_exit(0);
+    int READ_BATCH_SIZE;
+    for (;;) {
+        if(w->t->func == &worker1){
+            //READ_BATCH_SIZE = (int)ceil((double)w->orig_read_batch_size/(double)(threads_available + 1)) % 2 ?  (int)ceil((double)w->orig_read_batch_size/(double)(threads_available + 1)) + 1 :  (int)ceil((double)w->orig_read_batch_size/(double)(threads_available + 1));
+            if(w->n_done >= w->n_per_thread) break;
+            if ((w->n_per_thread - w->n_done) <= 1600) READ_BATCH_SIZE = (w->n_per_thread - w->n_done);
+            else READ_BATCH_SIZE = (int)ceil((double)(w->n_per_thread - w->n_done)/(double)(threads_available + 1)) % 2 ?  (int)ceil((double)(w->n_per_thread - w->n_done)/(double)(threads_available + 1)) + 1 :  (int)ceil((double)(w->n_per_thread - w->n_done)/(double)(threads_available + 1));
+            READ_BATCH_SIZE = READ_BATCH_SIZE > w->orig_read_batch_size ? w->orig_read_batch_size : READ_BATCH_SIZE;
+            READ_BATCH_SIZE = READ_BATCH_SIZE < 1000 ? 1000 : READ_BATCH_SIZE;
+            i = __sync_fetch_and_add(&w->i, (READ_BATCH_SIZE));
+            if (i >= w->t->n || i >= ((w - w->t->w) + 1)*w->n_per_thread ) break;
+            __sync_add_and_fetch(&(w->n_done), (READ_BATCH_SIZE));
+            int actual_batch_size =  i + READ_BATCH_SIZE >=  ((w - w->t->w) + 1)*w->n_per_thread ? ((w - w->t->w) + 1)*w->n_per_thread - i : READ_BATCH_SIZE;
+            actual_batch_size = i + actual_batch_size >= w->t->n ? w->t->n - i : actual_batch_size;
+
+            w->t->func(w->t->data, i, w - w->t->w, actual_batch_size, w->t->n, gpu_storage_vec_twice);
+        }
+        else {
+            i = __sync_fetch_and_add(&w->i, w->t->n_threads);
+            if (i >= w->t->n) break;
+            w->t->func(w->t->data, i, w - w->t->w, READ_BATCH_SIZE, w->t->n, gpu_storage_vec_twice);
+        }
+    }
+    //is_thread_available[w - w->t->w] = 1;
+    if(w->t->func == &worker1){
+        __sync_add_and_fetch(&(threads_available), 1);
+        int min_i;
+        //fprintf(stderr, "Threads available = %d\n", threads_available);
+        while ((min_i = steal_work(w->t)) >= 0){
+            //is_thread_available[w - w->t->w] = 0;
+            //if(w->t->func == &worker1) fprintf(stderr, "thread no. %d is here processing i %d to %d\n", w - w->t->w, i, i + READ_BATCH_SIZE);
+            //READ_BATCH_SIZE = (int)ceil((double)w->t->w[min_i].orig_read_batch_size/(double)(threads_available + 1)) % 2 ?  (int)ceil((double)w->t->w[min_i].orig_read_batch_size/(double)(threads_available + 1)) + 1 :  (int)ceil((double)w->t->w[min_i].orig_read_batch_size/(double)(threads_available + 1));
+            if(w->t->w[min_i].n_done >= w->t->w[min_i].n_per_thread) break;
+            if ((w->t->w[min_i].n_per_thread - w->t->w[min_i].n_done) <= 1600) READ_BATCH_SIZE = w->t->w[min_i].n_per_thread - w->t->w[min_i].n_done;
+            else READ_BATCH_SIZE = (int)ceil((double)(w->t->w[min_i].n_per_thread - w->t->w[min_i].n_done)/(double)(threads_available + 1)) % 2 ?  (int)ceil((double)(w->t->w[min_i].n_per_thread - w->t->w[min_i].n_done)/(double)(threads_available + 1)) + 1 :  (int)ceil((double)(w->t->w[min_i].n_per_thread - w->t->w[min_i].n_done)/(double)(threads_available + 1));
+            READ_BATCH_SIZE = READ_BATCH_SIZE > w->t->w[min_i].orig_read_batch_size ? w->t->w[min_i].orig_read_batch_size : READ_BATCH_SIZE;
+            READ_BATCH_SIZE = READ_BATCH_SIZE < 1000 ? 1000 : READ_BATCH_SIZE;
+            i = __sync_fetch_and_add(&(w->t->w[min_i].i), (READ_BATCH_SIZE));
+            if (i >= w->t->n || i >= (min_i + 1)*w->t->w[min_i].n_per_thread) break;
+            __sync_add_and_fetch(&(w->t->w[min_i].n_done), (READ_BATCH_SIZE));
+            int actual_batch_size =  (i + READ_BATCH_SIZE) >=  ((min_i + 1)*w->t->w[min_i].n_per_thread) ? ((min_i + 1)*w->t->w[min_i].n_per_thread) - i: READ_BATCH_SIZE;
+            actual_batch_size = (i + actual_batch_size) >= w->t->n ? w->t->n - i: actual_batch_size;
+            //fprintf(stderr, "Thread %d is doing a batch of %d on the behalf of thread %d\n", w - w->t->w, actual_batch_size, min_i);
+            w->t->func(w->t->data, i, w - w->t->w, actual_batch_size, w->t->n, gpu_storage_vec_twice);
+
+        }
+    }
+    else {
+        while ((i = steal_work(w->t)) >= 0){
+            //is_thread_available[w - w->t->w] = 0;
+            //if(w->t->func == &worker1) fprintf(stderr, "thread no. %d is here processing i %d to %d\n", w - w->t->w, i, i + READ_BATCH_SIZE);
+            w->t->func(w->t->data, i, w - w->t->w, READ_BATCH_SIZE, w->t->n, gpu_storage_vec_twice);
+        }
+    }
+
+    //gasal_aln_imp_mem_free(&gpu_storage);
+    //if(w->t->func == &worker1) fprintf (stderr, "Thread %d exits at %.3f secs\n", w - w->t->w, realtime());
+    if(w->t->func == &worker1) load_balance_waste_time[w - w->t->w] = realtime();
+    pthread_exit(0);
 }
 
 //void kt_for(int n_threads, void (*func)(void*,int, int, int, int), void *data, long n)

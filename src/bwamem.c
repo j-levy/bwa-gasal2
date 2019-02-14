@@ -1722,7 +1722,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     kv_resize(mem_alnreg_v, regs_vec, batch_size);
 
     int GPU_READ_BATCH_SIZE;
-    if (batch_size >= 4000) GPU_READ_BATCH_SIZE = 1000;
+    if (batch_size >= 4000) 
+        GPU_READ_BATCH_SIZE = 1000;
     else {
         GPU_READ_BATCH_SIZE = (int)ceil((double)batch_size/(double)4) % 2 ? (int)ceil((double)batch_size/(double)4) + 1: (int)ceil((double)batch_size/(double)4);
     }
@@ -1797,14 +1798,17 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 for (i = 0; i < chn.n; ++i) {
                     mem_chain_t *p = &chn.a[i];
                     if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
-                    //mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &read_seq_lens, &read_seq_offsets, &curr_read_offset, &ref_seq_batch, &ref_seq_lens, &ref_seq_offsets, &curr_ref_offset);
                     /* ===NOTE: it seems like in bwa-gasal2, mem_chain2aln has been cut down to compute fewer things. But I don't know WHAT kind of things.
                         it is probably worth it to modify that part to get back to the previous code partition:
                         - Simpler mem_align1_core, and more meaningful functions like mem_chain2aln
                         - Probably create yet another function to call GASAL2 (exactly like ksw_extend2)
-				Note: that function woudln't be integrated in mem_chain2aln because they wouldn't run in the same loop. See how GASAL2 call below is out of the loop call.
-				*/
+				    Note: that function woudln't be integrated in mem_chain2aln because they wouldn't run in the same loop. See how GASAL2 call below is out of the loop call.
+				    */
+
+                    //original call: mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &read_seq_lens, &read_seq_offsets, &curr_read_offset, &ref_seq_batch, &ref_seq_lens, &ref_seq_offsets, &curr_ref_offset);
+
                     mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &curr_read_offset, &curr_ref_offset, &gpu_batch_arr[gpu_batch_arr_idx]);
+
                     free(chn.a[i].seeds);
                 }
                 curr_read_offset += read_l_seq_with_p;
@@ -1816,7 +1820,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
 
 				// ===NOTE: filler/padder for the data structure : extensible_host_unpacked_query_batch (we always fill the whole sequence.)
-               	mem_gasal_fill(gpu_batch_arr, gpu_batch_arr_idx, read_l_seq, read_seq, read_l_seq_with_p);
+                // for the moment, we fill 
+                mem_gasal_fill(gpu_batch_arr, gpu_batch_arr_idx, read_l_seq, read_seq, read_l_seq_with_p);
             }
 
 

@@ -15,6 +15,7 @@
 
 // J.L. 2019-01-13 - select GPU when using more than one. Use the first available (0) by default.
 #define GPU_SELECT (0)
+#define NB_STREAMS (2)
 
 KSEQ_DECLARE(gzFile)
 
@@ -409,11 +410,13 @@ int gase_aln(int argc, char *argv[])
 	args->start_pos = WITH_START;
 
 	double time_extend = realtime();
-	gpu_storage_vec_arr =  (gasal_gpu_storage_v*)calloc(opt->n_threads, sizeof(gasal_gpu_storage_v));
+    
+    // J.L. 2019-02-14 16:26 create twice as many gasal_gpu_storage_v (vectors of stream): one for "short" ends, one for "long" ends (each of them having 2 streams) (and also delete all of them, see below destructor)
+    gpu_storage_vec_arr =  (gasal_gpu_storage_v*)calloc( 2 * (opt->n_threads), sizeof(gasal_gpu_storage_v));
 	int z;
-	for (z = 0; z < opt->n_threads; z++) {
+	for (z = 0; z <  2 * (opt->n_threads); z++) {
 		// J.L. 2018-12-21 change these to reflect ctors in GASAL2 
-		gpu_storage_vec_arr[z] = gasal_init_gpu_storage_v(2);
+		gpu_storage_vec_arr[z] = gasal_init_gpu_storage_v(NB_STREAMS);
 		//gasal_init_streams(&(gpu_storage_vec_arr[z]), 1000*300, 1000*300, 250*1000*600, 80*1000*600, 500*1000, 200*1000, LOCAL, WITH_START);
 		// J.L. 2019-01-07 10:43 TODO remove numbers from here, put them in DEFINES.
 		// Original values below
@@ -464,7 +467,7 @@ int gase_aln(int argc, char *argv[])
 	kt_pipeline(no_mt_io? 1 : 2, process, &aux, 3);
 
 	time_extend = realtime();
-	for (z = 0; z < opt->n_threads; z++) {
+	for (z = 0; z < (opt->n_threads) * 2 ; z++) {
 		// J.L. 2018-12-21 change these to reflect ctors in GASAL2
 		gasal_destroy_streams(&(gpu_storage_vec_arr[z]), args);
 		gasal_destroy_gpu_storage_v(&(gpu_storage_vec_arr[z]));
