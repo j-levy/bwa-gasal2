@@ -1096,7 +1096,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 
         
 		for (i = 0; i < av->n; ++i)  // test whether extension has been made before
-        { 
+        {
 			mem_alnreg_t *p = &av->a[i];
 			int64_t rd;
 			int qd, w, max_gap;
@@ -1175,16 +1175,9 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                 rmax[0] = l_pac;
         }
 
-        /*
-            // retrieve the reference sequence
-            rseq = bns_fetch_seq(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid);
-            assert(c->rid == rid);
-        */
-
         // this is to check if taking "around the sequence" results in "taking the whole sequence" or not. If not... go through that if. Should be modified.
 		if(s->len != l_query) {
 			int64_t rmax[2];
-			uint8_t *rseq = 0;
 			int rid;
 			rmax[0] = l_pac<<1; rmax[1] = 0;
 			rmax[0] = s->rbeg - (s->qbeg + cal_max_gap(opt, s->qbeg));
@@ -1195,10 +1188,15 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				if (s->rbeg < l_pac) rmax[1] = l_pac; // this works because all seeds are guaranteed to be on the same strand
 				else rmax[0] = l_pac;
 			}
+
 			// retrieve the reference sequence - from the index directly to the GPU storage.
-			// ===TODO: modify this to distinguish between left and right.
-            bns_fetch_seq_gpu(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid, curr_gpu_batch);
-			assert(c->rid == rid);
+			//bns_fetch_seq_gpu(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid, curr_gpu_batch);
+            
+            uint8_t *rseq = NULL;
+            rseq = bns_fetch_seq(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid);
+            assert(c->rid == rid);
+            curr_gpu_batch->n_target_batch = gasal_host_batch_fill(curr_gpu_batch->gpu_storage, curr_gpu_batch->n_target_batch, rseq, rmax[1] - rmax[0], TARGET);
+
 			/*
 				int rseq_beg, rseq_end;
 				rseq_beg = s->rbeg - (s->qbeg + cal_max_gap(opt, s->qbeg)) - rmax[0];
@@ -1206,70 +1204,64 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				rseq_beg = rseq_beg > 0 ? rseq_beg : 0;
 				rseq_end = rseq_end < (rmax[1] - rmax[0]) ? rseq_end : (rmax[1] - rmax[0]);
 			*/
-			//uint8_t* rs = malloc(rseq_end - rseq_beg);
-			int ref_l_seq_with_p = ((rmax[1] - rmax[0])%8) ? (rmax[1] - rmax[0]) + (8 - ((rmax[1] - rmax[0])%8)) : (rmax[1] - rmax[0]) ;
-			int j;
-			/*
-				for (i = 0, j = 0; i < (rmax[1] - rmax[0]) && j < MAX_SEQ_LEN; ++i, ++j) {
-					//rs[j] = rseq[i];
-					//kv_push(uint8_t, *ref_seq_batch, rseq[i]);
-					if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes) curr_gpu_batch->gpu_storage->host_unpacked_target_batch[curr_gpu_batch->n_target_batch++] = rseq[i];
-					else {
-						fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
-							exit(EXIT_FAILURE);
-					}
-				}
-			*/
-			int ref_l_seq = rmax[1] - rmax[0];
-			while (ref_l_seq < ref_l_seq_with_p) {
-				//kv_push(uint8_t, *ref_seq_batch, 0);
-				if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes) 
-				{
-					// J.L. 2018-12-20 16:17 DONE : create some function to add a single base
-					// J.L. 2019-12-20 12:35  emulating non-extensible memory host: curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = 4;
-                    curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
-                                                    curr_gpu_batch->n_target_batch, 
-                                                    4,
-                                                    TARGET);
-					//fprintf(stderr, "curr_gpu_batch->n_target_batch goes from %d to %d\n", tmp, curr_gpu_batch->n_target_batch);
-				} else {
-					fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
-					exit(EXIT_FAILURE);
-				}
-				ref_l_seq++;
-			}
+            int j;
+            int ref_l_seq_with_p = (rmax[1] - rmax[0]) + (8 - ((rmax[1] - rmax[0])%8));
+            /*  // padding. useless now it's included in the host_batch_fill (THANKS TO WHOM???)
+                //uint8_t* rs = malloc(rseq_end - rseq_beg);
+                int ref_l_seq = rmax[1] - rmax[0];
+                while (ref_l_seq < ref_l_seq_with_p) {
+                    //kv_push(uint8_t, *ref_seq_batch, 0);
+                    if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes) 
+                    {
+                        // J.L. 2018-12-20 16:17 DONE : create some function to add a single base
+                        // J.L. 2019-12-20 12:35  emulating non-extensible memory host: curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = 4;
+                        curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
+                                                        curr_gpu_batch->n_target_batch, 
+                                                        4,
+                                                        TARGET);
+                        //fprintf(stderr, "curr_gpu_batch->n_target_batch goes from %d to %d\n", tmp, curr_gpu_batch->n_target_batch);
+                    } else {
+                        fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
+                        exit(EXIT_FAILURE);
+                    }
+                    ref_l_seq++;
+                }
+            */
 			a->rseq_beg = rmax[0] /*+ rseq_beg*/;
-			if (bwa_verbose >= 4)
-				err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long) s->len, (long) s->qbeg, (long) s->rbeg, bns->anns[c->rid].name);
-           
+            if (1) // collapse in IDE - routine tests.
+            {
+                if (bwa_verbose >= 4)
+                    err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long) s->len, (long) s->qbeg, (long) s->rbeg, bns->anns[c->rid].name);
+            
 
-			if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
-                curr_gpu_batch->gpu_storage->host_query_batch_lens[curr_gpu_batch->n_seqs] = l_query;
-			else {
-				fprintf(stderr, "The size of host lens1 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
-				exit(EXIT_FAILURE);
-			}
-			//kv_push(int, *read_seq_offsets, *curr_read_offset);
-			if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
-                curr_gpu_batch->gpu_storage->host_query_batch_offsets[curr_gpu_batch->n_seqs] = *curr_read_offset;
-			else {
-				fprintf(stderr, "The size of host offsets1 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
-				exit(EXIT_FAILURE);
-			}
-			//kv_push(int, *ref_seq_lens, (rmax[1] - rmax[0]));
-			if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
-                curr_gpu_batch->gpu_storage->host_target_batch_lens[curr_gpu_batch->n_seqs] = rmax[1] - rmax[0];
-			else {
-				fprintf(stderr, "The size of host lens2 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
-				exit(EXIT_FAILURE);
-			}
-			//kv_push(int, *ref_seq_offsets, *curr_ref_offset);
-			if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
-                curr_gpu_batch->gpu_storage->host_target_batch_offsets[curr_gpu_batch->n_seqs] = *curr_ref_offset;
-			else {
-				fprintf(stderr, "The size of host offsets2 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
-				exit(EXIT_FAILURE);
-			}
+                if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
+                    curr_gpu_batch->gpu_storage->host_query_batch_lens[curr_gpu_batch->n_seqs] = l_query;
+                else {
+                    fprintf(stderr, "The size of host lens1 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
+                    exit(EXIT_FAILURE);
+                }
+                //kv_push(int, *read_seq_offsets, *curr_read_offset);
+                if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
+                    curr_gpu_batch->gpu_storage->host_query_batch_offsets[curr_gpu_batch->n_seqs] = *curr_read_offset;
+                else {
+                    fprintf(stderr, "The size of host offsets1 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
+                    exit(EXIT_FAILURE);
+                }
+                //kv_push(int, *ref_seq_lens, (rmax[1] - rmax[0]));
+                if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
+                    curr_gpu_batch->gpu_storage->host_target_batch_lens[curr_gpu_batch->n_seqs] = rmax[1] - rmax[0];
+                else {
+                    fprintf(stderr, "The size of host lens2 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
+                    exit(EXIT_FAILURE);
+                }
+                //kv_push(int, *ref_seq_offsets, *curr_ref_offset);
+                if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
+                    curr_gpu_batch->gpu_storage->host_target_batch_offsets[curr_gpu_batch->n_seqs] = *curr_ref_offset;
+                else {
+                    fprintf(stderr, "The size of host offsets2 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
+                    exit(EXIT_FAILURE);
+                }
+            }
 			*curr_ref_offset +=  ref_l_seq_with_p;
 			curr_gpu_batch->n_seqs++;
 			free(rseq);
@@ -1731,15 +1723,21 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     internal_batch_count = (int)ceil(((double)batch_size)/((double)(GPU_READ_BATCH_SIZE)));
     gpu_batch gpu_batch_arr[gpu_storage_vec->n];
 
-    for(j = 0; j < gpu_storage_vec->n; j++) {
-        gpu_batch_arr[j].gpu_storage = &(gpu_storage_vec->a[j]);
+    gpu_batch_asym_t gpu_batch_asym_arr[gpu_storage_vec->n];
+
+    for(j = 0; j < gpu_storage_vec->n; j++) 
+    {
+		gpu_batch_arr[j].gpu_storage = &(gpu_storage_vec[0].a[j]);
+        gpu_batch_asym_arr[j].gpu_storage_short = &(gpu_storage_vec[0].a[j]);
+        gpu_batch_asym_arr[j].gpu_storage_long = &(gpu_storage_vec[1].a[j]);
     }
     
 	int internal_batch_done = 0;
     int batch_processed = 0;
-    //int total_internal_batches = 0;
     int internal_batch_no = 0;
     double time_extend;
+    //int total_internal_batches = 0;
+
 
     //fprintf(stderr, "[ALIGN1_CORE INFO] gpu_storage_vec->n =%d, internal_batch_count=%d, GPU_READ_BATCH_SIZE=%d\n", gpu_storage_vec->n, internal_batch_count, GPU_READ_BATCH_SIZE);
 
@@ -1755,6 +1753,11 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = 0;
             gpu_batch_arr[gpu_batch_arr_idx].n_target_batch = 0;
             gpu_batch_arr[gpu_batch_arr_idx].n_seqs = 0;
+
+            gpu_batch_asym_arr[gpu_batch_arr_idx].n_query_batch = 0;
+            gpu_batch_asym_arr[gpu_batch_arr_idx].n_target_batch = 0;
+            gpu_batch_asym_arr[gpu_batch_arr_idx].n_seqs = 0;
+
             int curr_read_offset = 0;
             int curr_ref_offset = 0;
             int internal_batch_size = batch_size - batch_processed >= GPU_READ_BATCH_SIZE  ? GPU_READ_BATCH_SIZE : batch_size - batch_processed;
@@ -1782,20 +1785,21 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 if (bwa_verbose >= 4)
                     mem_print_chain(bns, &chn);
                 /*
-                    for (i = 0; i < chn.n; ++i) {
-                    mem_chain_t *c = &chn.a[i];
-                    if (c->n == 0) continue;
-                    uint64_t *srt;
-                    srt = malloc(c->n * 8);
-                    for (i = 0; i < c->n; ++i) srt[i] = (uint64_t)c->seeds[i].score<<32 | i;
-                    ks_introsort_64(c->n, srt);
+                    for (i = 0; i < chn.n; ++i) 
+					{
+						mem_chain_t *c = &chn.a[i];
+						if (c->n == 0) continue;
+						uint64_t *srt;
+						srt = malloc(c->n * 8);
+						for (i = 0; i < c->n; ++i) srt[i] = (uint64_t)c->seeds[i].score<<32 | i;
+						ks_introsort_64(c->n, srt);
                     }
                 */
 
                 // ===NOTE: CHAINS DONE. COMPUTING ALIGNMENT
 
                 kv_init(regs);
-                for (i = 0; i < chn.n; ++i) {
+                for (i = 0; i < chn.n; ++i) { // for all chains
                     mem_chain_t *p = &chn.a[i];
                     if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
                     /* ===NOTE: it seems like in bwa-gasal2, mem_chain2aln has been cut down to compute fewer things. But I don't know WHAT kind of things.
@@ -1820,7 +1824,6 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
 
 				// ===NOTE: filler/padder for the data structure : extensible_host_unpacked_query_batch (we always fill the whole sequence.)
-                // for the moment, we fill 
                 mem_gasal_fill(gpu_batch_arr, gpu_batch_arr_idx, read_l_seq, read_seq, read_l_seq_with_p);
             }
 
