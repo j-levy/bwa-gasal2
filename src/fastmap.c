@@ -137,7 +137,7 @@ int gase_aln(int argc, char *argv[])
 	ktp_aux_t aux;
 	extern time_struct *extension_time;
 	//run_exec_time = "run_exec_time.txt";
-	sprintf(run_exec_time, "run_exec_time.log");
+	sprintf(run_exec_time, "run_exec_time.txt");
 	memset(&aux, 0, sizeof(ktp_aux_t));
 	memset(pes, 0, 4 * sizeof(mem_pestat_t));
 	for (i = 0; i < 4; ++i) pes[i].failed = 1;
