@@ -1054,6 +1054,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 	//extern uint64_t *no_of_extensions;
 
 	// get the max possible span
+    /*
 	rmax[0] = l_pac<<1; rmax[1] = 0;
 	for (i = 0; i < c->n; ++i) 
 	{
@@ -1076,6 +1077,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		else 
 			rmax[0] = l_pac;
 	}
+    */
 
     /*
 	    // DO NOT retrieve the reference sequence
@@ -1088,6 +1090,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 	for (i = 0; i < c->n; ++i)
 		srt[i] = (uint64_t)c->seeds[i].score<<32 | i;
 	ks_introsort_64(c->n, srt);
+
 
 	for (k = c->n - 1; k >= 0; --k) 
     {
@@ -1195,7 +1198,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             uint8_t *rseq = NULL;
             rseq = bns_fetch_seq(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid);
             assert(c->rid == rid);
-            curr_gpu_batch->n_target_batch = gasal_host_batch_fill(curr_gpu_batch->gpu_storage, curr_gpu_batch->n_target_batch, rseq, rmax[1] - rmax[0], TARGET);
+
+            curr_gpu_batch->n_target_batch = gasal_host_batch_fill(curr_gpu_batch->gpu_storage, curr_gpu_batch->n_target_batch, rseq, (rmax[1] - rmax[0]), TARGET);
 
 			/*
 				int rseq_beg, rseq_end;
@@ -1206,10 +1210,13 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			*/
             int j;
             int ref_l_seq_with_p = (rmax[1] - rmax[0]) + (8 - ((rmax[1] - rmax[0])%8));
-            /*  // padding. useless now it's included in the host_batch_fill (THANKS TO WHOM???)
+            /*
+                // padding. useless now it's included in the host_batch_fill (THANKS TO WHOM???)
                 //uint8_t* rs = malloc(rseq_end - rseq_beg);
                 int ref_l_seq = rmax[1] - rmax[0];
-                while (ref_l_seq < ref_l_seq_with_p) {
+                fprintf(stderr, "ref_l_seq=%d, ref_l_seq_with_p=%d, n_target_batch\%8=%d\n", ref_l_seq, ref_l_seq_with_p, curr_gpu_batch->n_target_batch % 8);
+                while (ref_l_seq < ref_l_seq_with_p) 
+                {
                     //kv_push(uint8_t, *ref_seq_batch, 0);
                     if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes) 
                     {
@@ -1226,7 +1233,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                     }
                     ref_l_seq++;
                 }
-            */
+            /**/
 			a->rseq_beg = rmax[0] /*+ rseq_beg*/;
             if (1) // collapse in IDE - routine tests.
             {
