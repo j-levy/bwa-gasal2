@@ -119,8 +119,8 @@ extern "C" {
 	int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only);
 	int bns_pos2rid(const bntseq_t *bns, int64_t pos_f);
 	int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id);
-	uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len);
-	uint8_t *bns_fetch_seq(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid);
+	const uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len);
+	const uint8_t *bns_fetch_seq(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid);
 	void bns_get_seq_gpu(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len, gpu_batch *curr_gpu_batch);
 	void bns_fetch_seq_gpu(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid, gpu_batch *curr_gpu_batch);
 	int bns_intv2rid(const bntseq_t *bns, int64_t rb, int64_t re);

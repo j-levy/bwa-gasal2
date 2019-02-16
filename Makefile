@@ -65,6 +65,8 @@ short-index: all
 
 short: all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 150 -v 4 /data/work/jlevy/hg19_short/chr01.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
+		sha256sum short.log.orig
+		sha256sum short.log
 
 20k: all
 		./$(PROG) index fasta/target_batch.fasta

@@ -1078,13 +1078,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			rmax[0] = l_pac;
 	}
     */
-
-    /*
-	    // DO NOT retrieve the reference sequence
-        // ==> the sequence should be retrieved for the GPU, see below bns_fetch_seq_gpu
-	    rseq = bns_fetch_seq(bns, pac, &rmax[0], c->seeds[0].rbeg, &rmax[1], &rid);
-	    assert(c->rid == rid);
-    */
    
 	srt = malloc(c->n * 8);
 	for (i = 0; i < c->n; ++i)
@@ -1097,7 +1090,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		mem_alnreg_t *a;
 		s = &c->seeds[(uint32_t)srt[k]];
 
-        
 		for (i = 0; i < av->n; ++i)  // test whether extension has been made before
         {
 			mem_alnreg_t *p = &av->a[i];
@@ -1195,13 +1187,12 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 
 			// retrieve the reference sequence - from the index directly to the GPU storage.
 			//bns_fetch_seq_gpu(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid, curr_gpu_batch);
-            
             uint8_t *rseq = NULL;
             rseq = bns_fetch_seq(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid);
             assert(c->rid == rid);
-
+            uint32_t tmp = curr_gpu_batch->n_target_batch;
             curr_gpu_batch->n_target_batch = gasal_host_batch_fill(curr_gpu_batch->gpu_storage, curr_gpu_batch->n_target_batch, rseq, (rmax[1] - rmax[0]), TARGET);
-
+            
 			/*
 				int rseq_beg, rseq_end;
 				rseq_beg = s->rbeg - (s->qbeg + cal_max_gap(opt, s->qbeg)) - rmax[0];
@@ -1209,32 +1200,9 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				rseq_beg = rseq_beg > 0 ? rseq_beg : 0;
 				rseq_end = rseq_end < (rmax[1] - rmax[0]) ? rseq_end : (rmax[1] - rmax[0]);
 			*/
+
             int j;
-            int ref_l_seq_with_p = (rmax[1] - rmax[0]) + (8 - ((rmax[1] - rmax[0])%8));
-            /*
-                // padding. useless now it's included in the host_batch_fill (THANKS TO WHOM???)
-                //uint8_t* rs = malloc(rseq_end - rseq_beg);
-                int ref_l_seq = rmax[1] - rmax[0];
-                fprintf(stderr, "ref_l_seq=%d, ref_l_seq_with_p=%d, n_target_batch\%8=%d\n", ref_l_seq, ref_l_seq_with_p, curr_gpu_batch->n_target_batch % 8);
-                while (ref_l_seq < ref_l_seq_with_p) 
-                {
-                    //kv_push(uint8_t, *ref_seq_batch, 0);
-                    if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes) 
-                    {
-                        // J.L. 2018-12-20 16:17 DONE : create some function to add a single base
-                        // J.L. 2019-12-20 12:35  emulating non-extensible memory host: curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = 4;
-                        curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
-                                                        curr_gpu_batch->n_target_batch, 
-                                                        4,
-                                                        TARGET);
-                        //fprintf(stderr, "curr_gpu_batch->n_target_batch goes from %d to %d\n", tmp, curr_gpu_batch->n_target_batch);
-                    } else {
-                        fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
-                        exit(EXIT_FAILURE);
-                    }
-                    ref_l_seq++;
-                }
-            /**/
+            uint32_t ref_l_seq_with_p = curr_gpu_batch->n_target_batch - tmp; // ==  ((rmax[1] - rmax[0])%8) ? (rmax[1] - rmax[0]) + (8 - ((rmax[1] - rmax[0])%8)) : (rmax[1] - rmax[0]));
 
 			a->rseq_beg = rmax[0] /*+ rseq_beg*/;
             if (1) // collapse in IDE - routine tests.
@@ -1730,11 +1698,12 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     }
     int internal_batch_count = 0;
     internal_batch_count = (int)ceil(((double)batch_size)/((double)(GPU_READ_BATCH_SIZE)));
-
+    gpu_batch gpu_batch_arr[gpu_storage_vec->n];
     gpu_batch_asym_t gpu_batch_asym_arr[gpu_storage_vec->n];
 
     for(j = 0; j < gpu_storage_vec->n; j++) 
     {
+        gpu_batch_arr[j].gpu_storage = &(gpu_storage_vec[0].a[j]);
         gpu_batch_asym_arr[j].gpu_storage_short = &(gpu_storage_vec[0].a[j]);
         gpu_batch_asym_arr[j].gpu_storage_long = &(gpu_storage_vec[1].a[j]);
     }
@@ -1756,6 +1725,11 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         int internal_batch_start_idx = batch_processed;
         if (internal_batch_start_idx < batch_size && gpu_batch_arr_idx < gpu_storage_vec->n) 
 		{
+
+
+            gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = 0;
+            gpu_batch_arr[gpu_batch_arr_idx].n_target_batch = 0;
+            gpu_batch_arr[gpu_batch_arr_idx].n_seqs = 0;
 
             gpu_batch_asym_arr[gpu_batch_arr_idx].n_query_batch = 0;
             gpu_batch_asym_arr[gpu_batch_arr_idx].n_target_batch = 0;
@@ -1814,7 +1788,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
                     //original call: mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &read_seq_lens, &read_seq_offsets, &curr_read_offset, &ref_seq_batch, &ref_seq_lens, &ref_seq_offsets, &curr_ref_offset);
 
-                    mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &curr_read_offset, &curr_ref_offset, &gpu_batch_arr_asym[gpu_batch_arr_idx]);
+                    mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &curr_read_offset, &curr_ref_offset, &gpu_batch_arr[gpu_batch_arr_idx]);
 
                     free(chn.a[i].seeds);
                 }
@@ -1827,10 +1801,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
 
 				// ===NOTE: filler/padder for the data structure : extensible_host_unpacked_query_batch (we always fill the whole sequence.)
-                mem_gasal_fill(gpu_batch_arr_asym, gpu_batch_arr_idx, read_l_seq, read_seq, read_l_seq_with_p);
+                mem_gasal_fill(gpu_batch_arr, gpu_batch_arr_idx, read_l_seq, read_seq, read_l_seq_with_p);
             }
-
-
 
             // ===NOTE: Chains done, mem_chain2aln done (whatever it did)
             // ===NOTE: now, GASAL2 KERNEL LAUCNH ON BATCH
