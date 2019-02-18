@@ -1064,8 +1064,8 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
 
     if (bwa_verbose >= 4) {
         int j;
-        printf("*** Right ref:   "); for (j = 0; j < rmax[1] - rmax[0] - re; ++j) putchar("ACGTN"[(int)rseq[re+j]]); putchar('\n');
-        printf("*** Right query: "); for (j = 0; j < l_query - qe; ++j) putchar("ACGTN"[(int)query[qe+j]]); putchar('\n');
+        printf("*** Right ref:   "); for (j = 0; j < ref_seq_length; ++j) putchar("ACGTN"[(int)ref_seq[j]]); putchar('\n');
+        printf("*** Right query: "); for (j = 0; j < read_seq_length; ++j) putchar("ACGTN"[(int)read_seq[j]]); putchar('\n');
     }
 
     uint32_t ref_l_seq_with_p = cur->n_target_batch - prev_n_target_batch; 
@@ -1073,12 +1073,12 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
     *curr_read_offset += read_l_seq_with_p;
     *curr_ref_offset +=  ref_l_seq_with_p;
 
-    routine_test(cur, curr_read_offset[LONG], curr_ref_offset[LONG], l_query - qe, rmax[1] - rmax[0] - re);
+    routine_test(cur, *curr_read_offset, *curr_ref_offset, read_seq_length, ref_seq_length);
 
     cur->n_seqs++;
 }
 
-void routine_test(gpu_batch curr_gpu_batch, int curr_read_offset, int curr_ref_offset, int read_l_seq, int ref_l_seq)
+inline void routine_test(gpu_batch curr_gpu_batch, int curr_read_offset, int curr_ref_offset, int read_l_seq, int ref_l_seq)
 {
                 if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
                     curr_gpu_batch->gpu_storage->host_query_batch_lens[curr_gpu_batch->n_seqs] = read_l_seq;
@@ -1109,6 +1109,7 @@ void routine_test(gpu_batch curr_gpu_batch, int curr_read_offset, int curr_ref_o
                 }
 }
 
+//TODO: beginning of mem_chain2aln. I think I didn't forget anything. We'll see how many errors I'll get at compilation.
 void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av, int *curr_read_offset, int *curr_ref_offset, gpu_batch *curr_gpu_batch_short, gpu_batch *curr_gpu_batch_long)
 {
 	int i, k, rid, max_off[2], aw[2]; // aw: actual bandwidth used in extension
@@ -1263,7 +1264,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                 err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg, bns->anns[c->rid].name);
 
             // check if there's a left extension to prepare (we need to prepare the sequence to fill before)
-            uint8_t *rs, *qs;
+            uint8_t *rs = NULL, *qs = NULL;
             if (s->qbeg)
             {
                 // Prepare Left Extension
@@ -1279,7 +1280,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 
                 if (bwa_verbose >= 4) {
                     int j;
-                    printf("*** Left ref:   "); for (j = 0; j < tmp; ++j) putchar("ACGTN"[(int)rs[j]]); putchar('\n');
+                    printf("*** Left ref:   "); for (j = 0; j < ref_l_seq; ++j) putchar("ACGTN"[(int)rs[j]]); putchar('\n');
                     printf("*** Left query: "); for (j = 0; j < s->qbeg; ++j) putchar("ACGTN"[(int)qs[j]]); putchar('\n');
                 }
             }
@@ -1292,25 +1293,31 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             // Check if there's one or two extensions to do:
             if (s->qbeg == 0 || s->qbeg + s->len == l_query) // the string is either in the beginning or the end. Hence, only one extension is needed, and it will be long.
             {
-                // long extension:
+                a->align_sides = 1;
                 if (s->qbeg == 0) // it's a long, right extension
                 {
                     // right extension, long
                     fill_extension(curr_gpu_batch_long, seq + (re), query + (qe), rmax[1] - rmax[0] - (re), l_query - (s->qbeg + s->len), &curr_read_offset[LONG], &curr_ref_offset[LONG]);
+                    // no left extension, fill the left score with dummy values
+                    a->score = a->truesc = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
+                    a->score_left = 0;
                 } else { // it's a long, left extension
                     // left extension, long
                     fill_extension(curr_gpu_batch_long, rs, qs, ref_l_seq, read_l_seq, &curr_read_offset[LONG], &curr_ref_offset[LONG]);
+                    // no right extension, fill the right score with dummy values
+                    a->qe = l_query, a->re = s->rbeg + s->len;
+                    a->score_right = 0;
                 }
-
-                // do the thing
             } else {
                 // We need both. Now let's find out which side is longer, which side is shorter.
+                a->align_sides = 2;
                 if (s->qbeg < l_query - (s->qbeg + s_len))
                 {
                     //the left-extension is the shorter one. So the right is long.
                     fill_extension(curr_gpu_batch_short, rs, qs, ref_l_seq, read_l_seq, &curr_read_offset[SHORT], &curr_ref_offset[SHORT]);
 
                     fill_extension(curr_gpu_batch_long, seq + (re), query + (qe), rmax[1] - rmax[0] - (re), l_query - (s->qbeg + s->len), &curr_read_offset[LONG], &curr_ref_offset[LONG]);
+
                 } else {
                     // the left-extension is the longer one. So the right is short.
                     fill_extension(curr_gpu_batch_long, rs, qs, ref_l_seq, read_l_seq, &curr_read_offset[LONG], &curr_ref_offset[LONG]);
@@ -1327,7 +1334,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 
 
 
-            if (bwa_verbose >= 4) printf("*** Added alignment region: [%d,%d) <=> [%ld,%ld); score=%d\n", a->qb, a->qe, (long)a->rb, (long)a->re, a->score);
+            if (bwa_verbose >= 4) 
+                printf("*** Added alignment region: [%d,%d) <=> [%ld,%ld); score=%d\n", a->qb, a->qe, (long)a->rb, (long)a->re, a->score);
 
 			/*
 				int rseq_beg, rseq_end;
