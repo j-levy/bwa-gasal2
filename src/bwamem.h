@@ -20,6 +20,9 @@ typedef struct __smem_i smem_i;
 #define MEM_F_SOFTCLIP  0x200
 #define MEM_F_SMARTPE   0x400
 
+#define SHORT (0)
+#define LONG (1)
+
 typedef struct {
 	int a, b;               // match score and mismatch penalty
 	int o_del, e_del;
@@ -199,8 +202,6 @@ extern "C" {
 	// J.L. 2019-01-10 10:15 moved proto from bwamem_extra.c
 	void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *seq, void *buf, int batch_size, int batch_start_idx, mem_alnreg_v *w_regs, int tid, gasal_gpu_storage_v *gpu_storage_vec);
 
-	// J.L.2019-02-13 11:47 added proto for new function (de-cluttering align1_core)
-	void mem_gasal_fill(gpu_batch *gpu_batch_arr, int gpu_batch_arr_idx, int read_l_seq, char *read_seq, int read_l_seq_with_p);
 
 #ifdef __cplusplus
 }

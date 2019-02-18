@@ -97,6 +97,8 @@ typedef struct {
 
     Note that, for the moment, I can program it freely as "short=left" and "long=right" if needed. But the names would be confusing.
 */
+/*
+// unused. instantiate 2 gpu_batch instead.
 typedef struct {
 		gasal_gpu_storage_t *gpu_storage_short;
 		gasal_gpu_storage_t *gpu_storage_long;
@@ -107,6 +109,7 @@ typedef struct {
 		//int32_t *max_score, *read_start, *read_end, *ref_start, *ref_end;
 		int n_query_batch, n_target_batch, n_seqs;
 } gpu_batch_asym_t;
+*/
 
 #ifdef __cplusplus
 extern "C" {
