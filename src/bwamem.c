@@ -1046,7 +1046,7 @@ typedef kvec_t(int) seq_offsets;
 void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av, int *curr_read_offset, int *curr_ref_offset, gpu_batch *curr_gpu_batch)
 {
 	int i, k, rid, max_off[2], aw[2]; // aw: actual bandwidth used in extension
-	int64_t l_pac = bns->l_pac, rmax[2], tmp, max = 0;
+	int64_t l_pac = bns->l_pac, rmax[2], ref_l_seq, max = 0;
 	const mem_seed_t *s;
 	uint8_t *rseq = NULL;
 	uint64_t *srt;
@@ -1195,24 +1195,60 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             uint32_t prev_n_target_batch = curr_gpu_batch->n_target_batch;
             uint32_t prev_n_query_batch = curr_gpu_batch->n_query_batch;
 
-            // fillers for right extension. TODO: put correct boundaries for right-hand sequences. Take a peed at the original code below.
-            curr_gpu_batch->n_target_batch = gasal_host_batch_fill(curr_gpu_batch->gpu_storage_short, curr_gpu_batch->n_target_batch, rseq, (rmax[1] - rmax[0]), TARGET);
-            curr_gpu_batch.n_query_batch = gasal_host_batch_fill(curr_gpu_batch.gpu_storage_short, curr_gpu_batch.n_query_batch, read_seq, read_l_seq, QUERY);
+            if (bwa_verbose >= 4) 
+                err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg, bns->anns[c->rid].name);
 
-            // TODO: LEFT EXTENSION 
-            uint8_t *rs, *qs;
-            int qle, tle, gtle, gscore;
-            // ===NOTE: create local copy of beginning of query, reversed (because aligning left side, so from right to left!!)
-            qs = malloc(s->qbeg * sizeof(uint8_t));
-            for (i = 0; i < s->qbeg; ++i) 
-                qs[i] = query[s->qbeg - 1 - i];
-            // ===NOTE: create local copy of beginning of reference, reversed (because aligning left side, so from right to left!!)
-            tmp = s->rbeg - rmax[0];
-            rs = malloc(tmp * sizeof(uint8_t));
-            for (i = 0; i < tmp; ++i) 
-                rs[i] = rseq[tmp - 1 - i];
-            // fillers for left extension.
-            gpu_batch_asym_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_fill(gpu_batch_asym_arr[gpu_batch_arr_idx].gpu_storage_long, gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, read_seq, read_l_seq, QUERY);
+            if (s->qbeg) // left extension. Don't extend if there's nothing to extend (i.e. the seed is at the beginning, border case)
+            { 
+                uint8_t *rs, *qs;
+                // ===NOTE: create local copy of beginning of query, reversed (because aligning left side, so from right to left!!)
+                qs = malloc(s->qbeg * sizeof(uint8_t));
+                for (i = 0; i < s->qbeg; ++i) 
+                    qs[i] = query[s->qbeg - 1 - i];
+                // ===NOTE: create local copy of beginning of reference, reversed (because aligning left side, so from right to left!!)
+                ref_l_seq = s->rbeg - rmax[0];
+                rs = malloc(ref_l_seq * sizeof(uint8_t));
+                for (i = 0; i < ref_l_seq; ++i) 
+                    rs[i] = rseq[ref_l_seq - 1 - i];
+
+                // fillers for left extension.
+                curr_gpu_batch->n_target_batch = gasal_host_batch_fill(curr_gpu_batch->gpu_storage_long, curr_gpu_batch->n_target_batch, rs, ref_l_seq, TARGET);
+                curr_gpu_batch->n_query_batch = gasal_host_batch_fill(curr_gpu_batch.gpu_storage_long, curr_gpu_batch.n_query_batch, qs, read_l_seq, QUERY);
+
+                if (bwa_verbose >= 4) {
+                    int j;
+                    printf("*** Left ref:   "); for (j = 0; j < tmp; ++j) putchar("ACGTN"[(int)rs[j]]); putchar('\n');
+                    printf("*** Left query: "); for (j = 0; j < s->qbeg; ++j) putchar("ACGTN"[(int)qs[j]]); putchar('\n');
+                }
+
+                free(qs); free(rs);
+            } else {
+                a->score = a->truesc = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
+            }
+
+            if (s->qbeg + s->len != l_query) // right extension. Again, don't extend is the seed ends at the rightmost position of the sequence.
+            { 
+                int qle, tle, qe, re, gtle, gscore, sc0 = a->score;
+                qe = s->qbeg + s->len;
+                re = s->rbeg + s->len - rmax[0];
+                assert(re >= 0);
+
+                // fillers for right extension. 
+                curr_gpu_batch->n_target_batch = gasal_host_batch_fill(curr_gpu_batch->gpu_storage_short, curr_gpu_batch->n_target_batch,  rseq + re, rmax[1] - rmax[0] - re, TARGET);
+                curr_gpu_batch->n_query_batch = gasal_host_batch_fill(curr_gpu_batch.gpu_storage_short, curr_gpu_batch.n_query_batch, query + qe, l_query - qe, QUERY);
+
+                int prev = a->score;
+                if (bwa_verbose >= 4) {
+                    int j;
+                    printf("*** Right ref:   "); for (j = 0; j < rmax[1] - rmax[0] - re; ++j) putchar("ACGTN"[(int)rseq[re+j]]); putchar('\n');
+                    printf("*** Right query: "); for (j = 0; j < l_query - qe; ++j) putchar("ACGTN"[(int)query[qe+j]]); putchar('\n');
+                }
+            } else { 
+                a->qe = l_query, a->re = s->rbeg + s->len;
+            }
+
+            if (bwa_verbose >= 4) printf("*** Added alignment region: [%d,%d) <=> [%ld,%ld); score=%d\n", a->qb, a->qe, (long)a->rb, (long)a->re, a->score);
+
             
 			/*
 				int rseq_beg, rseq_end;
