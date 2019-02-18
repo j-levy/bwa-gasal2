@@ -22,6 +22,7 @@ typedef struct __smem_i smem_i;
 
 #define SHORT (0)
 #define LONG (1)
+#define BOTH_SHORT_LONG (2)
 
 typedef struct {
 	int a, b;               // match score and mismatch penalty
@@ -72,9 +73,13 @@ typedef struct {
 	int qb_est, qe_est;
 	int64_t rseq_beg;
 	int rid;        // reference seq ID
-	int score_left; // left-alignment score
-	int score_right;// right-alignment score: these scores must be explicit now because the alignments might be done in parallel
+	int score_short; // partial score for the shortest strand to align
+	int score_long;// same for longest strand. these scores must be explicit now because the alignments might be done in parallel
 	int score;      // best local SW score
+    uint8_t align_sides; // keeps track of which side was asked for alignment. 
+    
+    /* Actually, you can have either only left, or only right, or both sides (if the seed is at the beginning or at the end of the sequence). So you must remember if you had to extend once or twice, and which side you had to extend. */
+
 	int truesc;     // actual score corresponding to the aligned region; possibly smaller than $score
 	int sub;        // 2nd best SW score
 	int alt_sc;
