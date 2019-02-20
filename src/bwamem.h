@@ -24,6 +24,10 @@ typedef struct __smem_i smem_i;
 #define LONG (1)
 #define BOTH_SHORT_LONG (2)
 
+#define LEFT (0)
+#define RIGHT (1)
+#define BOTH_LEFT_RIGHT (2)
+
 
 typedef struct {
 	int a, b;               // match score and mismatch penalty
@@ -69,19 +73,20 @@ typedef struct {
 
 typedef struct {
 	int64_t rb, re; // [rb,re): reference sequence in the alignment
-	int64_t rb_est, re_est;
 	int qb, qe;     // [qb,qe): query sequence in the alignment
+	int64_t rb_est, re_est;
 	int qb_est, qe_est;
 	int64_t rseq_beg;
 	int rid;        // reference seq ID
-	int score_short; // partial score for the shortest strand to align
-	int score_long;// same for longest strand. these scores must be explicit now because the alignments might be done in parallel
 	int score;      // best local SW score
     
     uint8_t align_sides; // number of sides wanted for alignment. 1 side = it's a long side, 2 sides = it's short and long.
-    
-    /* Actually, you can have either only left, or only right, or both sides (if the seed is at the beginning or at the end of the sequence). So you must remember if you had to extend once or twice, and which side you had to extend. */
+    uint8_t where_is_long; // tells where the "LONG" side is. If it's right, then the short side (if any - check align_sides) must be on the left.
 
+    /* Actually, you can have either only left, or only right, or both sides (if the seed is at the beginning or at the end of the sequence). So you must remember if you had to extend once or twice, and which side you had to extend. */
+	
+	reg_alnpart_t part[2]; // part is LEFT/RIGHT 
+    
 	int truesc;     // actual score corresponding to the aligned region; possibly smaller than $score
 	int sub;        // 2nd best SW score
 	int alt_sc;
@@ -96,6 +101,12 @@ typedef struct {
 	float frac_rep;
 	uint64_t hash;
 } mem_alnreg_t;
+
+typedef struct {
+	int query_begin, query_end;
+	int64_t ref_begin, ref_end;
+	int score;
+} reg_alnpart_t
 
 typedef struct { size_t n, m; mem_alnreg_t *a; } mem_alnreg_v;
 
