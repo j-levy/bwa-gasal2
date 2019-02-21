@@ -86,7 +86,9 @@ typedef struct {
     /* Actually, you can have either only left, or only right, or both sides (if the seed is at the beginning or at the end of the sequence). So you must remember if you had to extend once or twice, and which side you had to extend. */
 	
 	reg_alnpart_t part[2]; // part is LEFT/RIGHT 
-    
+    int query_seed_begin;
+    int ref_seed_begin;
+
 	int truesc;     // actual score corresponding to the aligned region; possibly smaller than $score
 	int sub;        // 2nd best SW score
 	int alt_sc;

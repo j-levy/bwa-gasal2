@@ -1910,9 +1910,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             }
             
         }
-
-
-        // TODO: continue dirty job here
+        
         // ===NOTE: GASAL2 GET RESULT, measure time
 
         //fprintf(stderr, "Current extension time of %d seeds on GPU by thread no. %d is %.3f usec\n", kv_size(ref_seq_lens), tid,  extension_time[tid]*1e6);
@@ -1922,7 +1920,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         {
             while (internal_batch_idx != gpu_storage_vec->n) 
             {
-                gpu_batch *cur = (*(gpu_batch_arr + i) + internal_batch_idx);
+                gpu_batch *cur = (*(gpu_batch_arr + m) + internal_batch_idx);
                 time_extend = realtime();
                 int x = 0;
                 if (cur->gpu_storage->is_free != 1) {
@@ -2030,13 +2028,30 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
         // gather results
 
-        // TODO: do the stuff
-
-        // results gathered
-        // TODO: configure that part to work with correct indexes and offsets
-        for(j = 0, r = cur->batch_start; j < cur->batch_size; ++j, ++r)
+        for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + internal_batch_size; ++j)
         {
-            regs.n = mem_sort_dedup_patch(opt, bns, pac,(uint8_t*)(seq[r].seq), regs.n, regs.a);
+            int i;
+            int seq_idx=0;
+            mem_alnreg_v regs = kv_A(regs_vec, j);
+
+            for(i = 0; i < regs.n; ++i){
+                mem_alnreg_t *a = &regs.a[i];
+                //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
+                if (a->seedlen0 != seq[j].l_seq) //kv_A(read_seq_lens, seq_idx)
+                { 
+
+                    a->score = a->part[LEFT].score + a->part[RIGHT].score + a->score;
+                    a->qb = a->query_seed_begin - a->part[LEFT].query_end;
+                    a->qe = a-> query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end;
+                    a->qb = a->query_seed_begin - a->part[LEFT].query_end;
+                    a->qe = a-> query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end;
+                    a->truesc = a->score;
+                   
+                    seq_idx++;
+                }
+            }
+
+            regs.n = mem_sort_dedup_patch(opt, bns, pac,(uint8_t*)(seq[j].seq), regs.n, regs.a);
             if (bwa_verbose >= 4) {
                 err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
                 for (i = 0; i < regs.n; ++i) {
@@ -2050,83 +2065,85 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     p->is_alt = 1;
                 //free(kv_A(read_seqns, i));
             }
-            w_regs[r + batch_start_idx] = regs;
+            w_regs[j + batch_start_idx] = regs;
             //free(regs.a);
         }
 
+        // results gathered
+
         /*
-        // vv Deprecated vv TODO: Should be removed soon
-        int internal_batch_idx = 0;
-        while (internal_batch_idx != gpu_storage_vec->n) {
-            time_extend = realtime();
-            int x = 0;
-            if (gpu_batch_arr[internal_batch_idx].gpu_storage->is_free != 1) {
-                x = (gasal_is_aln_async_done(gpu_batch_arr[internal_batch_idx].gpu_storage) == 0);
-                //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d \n", tid, batch_size, internal_batch_count, internal_batch_idx);
-            }
-            if (x) 
-                extension_time[tid].get_results_actual += (realtime() - time_extend);
-            else if (gpu_batch_arr[internal_batch_idx].gpu_storage->is_free != 1 && x == 0) 
-                extension_time[tid].get_results_wasted += (realtime() - time_extend);
-            //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d, batches launched=%d, batches done=%d \n", tid, batch_size, internal_batch_count, internal_batch_idx, internal_batch_no, internal_batch_done);
-            //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is \n");
-            if ((x == 1 || gpu_batch_arr[internal_batch_idx].no_extend == 1) && gpu_batch_arr[internal_batch_idx].is_active == 1)
-            {
-                // J.L. 2018-12-21 15:21 changed calls with best score
-                int32_t *max_score = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->aln_score;
-                int32_t *read_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->query_batch_start;
-                int32_t  *read_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->query_batch_end;
-                int32_t *ref_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->target_batch_start;
-                int32_t   *ref_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->target_batch_end;
+            // vv Deprecated vv TODO: Should be removed soon
+            int internal_batch_idx = 0;
+            while (internal_batch_idx != gpu_storage_vec->n) {
+                time_extend = realtime();
+                int x = 0;
+                if (gpu_batch_arr[internal_batch_idx].gpu_storage->is_free != 1) {
+                    x = (gasal_is_aln_async_done(gpu_batch_arr[internal_batch_idx].gpu_storage) == 0);
+                    //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d \n", tid, batch_size, internal_batch_count, internal_batch_idx);
+                }
+                if (x) 
+                    extension_time[tid].get_results_actual += (realtime() - time_extend);
+                else if (gpu_batch_arr[internal_batch_idx].gpu_storage->is_free != 1 && x == 0) 
+                    extension_time[tid].get_results_wasted += (realtime() - time_extend);
+                //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d, batches launched=%d, batches done=%d \n", tid, batch_size, internal_batch_count, internal_batch_idx, internal_batch_no, internal_batch_done);
+                //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is \n");
+                if ((x == 1 || gpu_batch_arr[internal_batch_idx].no_extend == 1) && gpu_batch_arr[internal_batch_idx].is_active == 1)
+                {
+                    // J.L. 2018-12-21 15:21 changed calls with best score
+                    int32_t *max_score = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->aln_score;
+                    int32_t *read_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->query_batch_start;
+                    int32_t  *read_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->query_batch_end;
+                    int32_t *ref_start = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->target_batch_start;
+                    int32_t   *ref_end = gpu_batch_arr[internal_batch_idx].gpu_storage->host_res->target_batch_end;
 
-                int seq_idx=0;
-                for(j = 0, r = gpu_batch_arr[internal_batch_idx].batch_start; j < gpu_batch_arr[internal_batch_idx].batch_size; ++j, ++r){
-                    int i;
-                    mem_alnreg_v regs = kv_A(regs_vec, r);
-                    //int read_pos = kv_A(read_seq_offsets, j);
-                    //int read_len = kv_A(read_seq_lens, j);
-                    //uint8_t* read_seq = &(kv_A(read_seq_batch, read_pos));
-                    if (gpu_batch_arr[internal_batch_idx].no_extend == 1) fprintf(stderr, "I am here too as well with regs.n %d\n", regs.n);
-                    for(i = 0; i < regs.n; ++i){
-                        mem_alnreg_t *a = &regs.a[i];
-                        //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
-                        if (a->seedlen0 != seq[r].l_seq) { //kv_A(read_seq_lens, seq_idx)
-                            a->score = max_score[seq_idx];
-                            a->qb = read_start[seq_idx];
-                            a->qe = read_end[seq_idx] + 1;
-                            a->rb = ref_start[seq_idx] + a->rseq_beg;
-                            a->re = ref_end[seq_idx] + a->rseq_beg + 1;
-                            a->truesc = max_score[seq_idx];
+                    int seq_idx=0;
+                    for(j = 0, r = gpu_batch_arr[internal_batch_idx].batch_start; j < gpu_batch_arr[internal_batch_idx].batch_size; ++j, ++r){
+                        int i;
+                        mem_alnreg_v regs = kv_A(regs_vec, r);
+                        //int read_pos = kv_A(read_seq_offsets, j);
+                        //int read_len = kv_A(read_seq_lens, j);
+                        //uint8_t* read_seq = &(kv_A(read_seq_batch, read_pos));
+                        if (gpu_batch_arr[internal_batch_idx].no_extend == 1) fprintf(stderr, "I am here too as well with regs.n %d\n", regs.n);
+                        for(i = 0; i < regs.n; ++i){
+                            mem_alnreg_t *a = &regs.a[i];
+                            //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
+                            if (a->seedlen0 != seq[r].l_seq) { //kv_A(read_seq_lens, seq_idx)
+                                a->score = max_score[seq_idx];
+                                a->qb = read_start[seq_idx];
+                                a->qe = read_end[seq_idx] + 1;
+                                a->rb = ref_start[seq_idx] + a->rseq_beg;
+                                a->re = ref_end[seq_idx] + a->rseq_beg + 1;
+                                a->truesc = max_score[seq_idx];
 
-                            seq_idx++;
+                                seq_idx++;
+                            }
                         }
-                    }
-                    regs.n = mem_sort_dedup_patch(opt, bns, pac,(uint8_t*)(seq[r].seq), regs.n, regs.a);
-                    if (bwa_verbose >= 4) {
-                        err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
+                        regs.n = mem_sort_dedup_patch(opt, bns, pac,(uint8_t*)(seq[r].seq), regs.n, regs.a);
+                        if (bwa_verbose >= 4) {
+                            err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
+                            for (i = 0; i < regs.n; ++i) {
+                                mem_alnreg_t *p = &regs.a[i];
+                                printf("** %d, [%d,%d) <=> [%ld,%ld)\n", p->score, p->qb, p->qe, (long)p->rb, (long)p->re);
+                            }
+                        }
                         for (i = 0; i < regs.n; ++i) {
                             mem_alnreg_t *p = &regs.a[i];
-                            printf("** %d, [%d,%d) <=> [%ld,%ld)\n", p->score, p->qb, p->qe, (long)p->rb, (long)p->re);
-                        }
-                    }
-                    for (i = 0; i < regs.n; ++i) {
-                        mem_alnreg_t *p = &regs.a[i];
-                        if (p->rid >= 0 && bns->anns[p->rid].is_alt)
-                            p->is_alt = 1;
-                        //free(kv_A(read_seqns, i));
+                            if (p->rid >= 0 && bns->anns[p->rid].is_alt)
+                                p->is_alt = 1;
+                            //free(kv_A(read_seqns, i));
 
+                        }
+                        w_regs[r + batch_start_idx] = regs;
+                        //free(regs.a);
                     }
-                    w_regs[r + batch_start_idx] = regs;
-                    //free(regs.a);
+
+                    gpu_batch_arr[internal_batch_idx].is_active = 0;
+                    internal_batch_done++;
+                    //fprintf(stderr, "internal batch %d done\n", internal_batch_done - 1);
                 }
 
-                gpu_batch_arr[internal_batch_idx].is_active = 0;
-                internal_batch_done++;
-                //fprintf(stderr, "internal batch %d done\n", internal_batch_done - 1);
-            }
-
-            internal_batch_idx++;
-        }// end while
+                internal_batch_idx++;
+            }// end while
         /**/
     }
     kv_destroy(regs_vec);
