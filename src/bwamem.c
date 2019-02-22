@@ -45,6 +45,8 @@
  * When there are gaps, l should be the length of alignment matches (i.e. the M operator in CIGAR)
  */
 
+
+
 static const bntseq_t *global_bns = 0; // for debugging only
 
 mem_opt_t *mem_opt_init() {
@@ -122,6 +124,9 @@ static void smem_aux_destroy(smem_aux_t *a) {
 	free(a->mem1.a);
 	free(a);
 }
+
+
+
 
 typedef struct {
 	bwtint_t w;
@@ -1197,7 +1202,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		a = kv_pushp(mem_alnreg_t, *av);
 		memset(a, 0, sizeof(mem_alnreg_t));
 		a->w = aw[0] = aw[1] = opt->w;
-		a->score = a->truesc = a->score_short = a->score_long = -1;
+        //FIXME: check the following
+		a->score = a->truesc = a->score_long = -1;
 		a->rid = c->rid;
 
         // building estimate values for seed filtering (estimates of the beginning and end of the alnignment on ref and read)
@@ -1278,11 +1284,11 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                 }
             }
             
-
             int qe, re;
             qe = s->qbeg + s->len;
             re = s->rbeg + s->len - rmax[0];
 
+            a->score = s->score;
             // Check if there's one or two extensions to do:
             // TODO: add scores in case of unneeded alignment.
             if (s->qbeg == 0 || s->qbeg + s->len == l_query) // the string is either in the beginning or the end. Hence, only one extension is needed, and it will be long.
@@ -1295,8 +1301,13 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                     fill_extension(curr_gpu_batch_long, seq + (re), query + (qe), rmax[1] - rmax[0] - (re), l_query - (s->qbeg + s->len), &curr_read_offset[LONG], &curr_ref_offset[LONG]);
                     a->where_is_long = RIGHT;
 
-                    a->score = a->truesc = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
-                    a->score_short = 0;
+                    //a->score = a->truesc = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
+                    // FIXME: modify this
+                    a->part[LEFT].query_begin = 0;
+                    a->part[LEFT].query_end = 0;
+                    a->part[LEFT].ref_begin = 0;
+                    a->part[LEFT].ref_end = 0;
+                    a->part[LEFT].score = s->len * opt->a;
 
                     if (bwa_verbose >= 4) {
                         int j;
@@ -1309,8 +1320,11 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                     fill_extension(curr_gpu_batch_long, rs, qs, ref_l_seq, read_l_seq, &curr_read_offset[LONG], &curr_ref_offset[LONG]);
                     a->where_is_long = LEFT;
 
-                    a->qe = l_query, a->re = s->rbeg + s->len;
-                    a->score_short = 0;
+                    a->part[RIGHT].query_begin = read_l_seq;
+                    a->part[RIGHT].query_end = read_l_seq;
+                    a->part[RIGHT].ref_begin = ref_l_seq;
+                    a->part[RIGHT].ref_end = ref_l_seq;
+                    a->part[RIGHT].score = s->len * opt->a;
                 }
             } else {
                 // We need both. Now let's find out which side is longer, which side is shorter.
@@ -1358,6 +1372,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 
             free(rseq);
 
+        // a->score = a->truesc = s->score, a->qb = 0, a->rb = s->rbeg, a->qe = l_query, a->re = s->rbeg + s->len;
 
         /* Original alignment. For reference only. Can be deleted anytime. */
         /*
