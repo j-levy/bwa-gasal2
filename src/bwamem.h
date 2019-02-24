@@ -72,6 +72,12 @@ typedef struct {
 } mem_opt_t;
 
 typedef struct {
+	int query_begin, query_end;
+	int64_t ref_begin, ref_end;
+	int score;
+} reg_alnpart_t;
+
+typedef struct {
 	int64_t rb, re; // [rb,re): reference sequence in the alignment
 	int qb, qe;     // [qb,qe): query sequence in the alignment
 	int64_t rb_est, re_est;
@@ -103,12 +109,6 @@ typedef struct {
 	float frac_rep;
 	uint64_t hash;
 } mem_alnreg_t;
-
-typedef struct {
-	int query_begin, query_end;
-	int64_t ref_begin, ref_end;
-	int score;
-} reg_alnpart_t
 
 typedef struct { size_t n, m; mem_alnreg_t *a; } mem_alnreg_v;
 
@@ -222,6 +222,9 @@ extern "C" {
 	// J.L. 2019-01-10 10:15 moved proto from bwamem_extra.c
 	void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *seq, void *buf, int batch_size, int batch_start_idx, mem_alnreg_v *w_regs, int tid, gasal_gpu_storage_v *gpu_storage_vec);
 
+
+    // J.L. 2019-02-22 added some prototypes
+    inline void routine_test(gpu_batch *curr_gpu_batch, int curr_read_offset, int curr_ref_offset, int read_l_seq, int ref_l_seq);
 
 #ifdef __cplusplus
 }
