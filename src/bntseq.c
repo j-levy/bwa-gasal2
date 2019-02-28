@@ -423,7 +423,7 @@ void bns_fetch_seq_gpu(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, in
 	//return seq;
 }
 
-const uint8_t *bns_fetch_seq(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid)
+uint8_t *bns_fetch_seq(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid)
 {
 	int64_t far_beg, far_end, len;
 	int is_rev;
@@ -503,7 +503,7 @@ void bns_get_seq_gpu(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end
 }
 
 
-const uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len)
+uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len)
 {
 	uint8_t *seq = 0;
 	if (end < beg) end ^= beg, beg ^= end, end ^= beg; // if end is smaller, swap

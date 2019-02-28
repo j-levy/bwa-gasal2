@@ -37,7 +37,7 @@ LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
 
-VALGRIND=valgrind
+VALGRIND=valgrind --track-origins=yes
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
 
 ifeq ($(shell uname -s),Linux)
@@ -70,7 +70,7 @@ short: all
 
 20k: all
 		./$(PROG) index fasta/target_batch.fasta
-		./$(PROG) gase_aln -v 4 -l 150 fasta/target_batch.fasta fasta/query_batch.fasta > res.log
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -v 4 -l 150 fasta/target_batch.fasta fasta/query_batch.fasta > res.log
 
 srr150index: all
 		./$(PROG) index /data/work/jlevy/hg19.fasta
