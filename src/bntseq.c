@@ -396,34 +396,139 @@ int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id)
 }
 
 
-void bns_fetch_seq_gpu(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid, gpu_batch *curr_gpu_batch)
-{
-	int64_t far_beg, far_end, len;
-	int is_rev;
-	//uint8_t *seq;
+/*
+	void bns_fetch_seq_gpu(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid, gpu_batch *curr_gpu_batch)
+	{
+		int64_t far_beg, far_end, len;
+		int is_rev;
+		//uint8_t *seq;
 
-	if (*end < *beg) *end ^= *beg, *beg ^= *end, *end ^= *beg; // if end is smaller, swap
-	assert(*beg <= mid && mid < *end);
-	*rid = bns_pos2rid(bns, bns_depos(bns, mid, &is_rev));
-	far_beg = bns->anns[*rid].offset;
-	far_end = far_beg + bns->anns[*rid].len;
-	if (is_rev) { // flip to the reverse strand
-		int64_t tmp = far_beg;
-		far_beg = (bns->l_pac<<1) - far_end;
-		far_end = (bns->l_pac<<1) - tmp;
+		if (*end < *beg) *end ^= *beg, *beg ^= *end, *end ^= *beg; // if end is smaller, swap
+		assert(*beg <= mid && mid < *end);
+		*rid = bns_pos2rid(bns, bns_depos(bns, mid, &is_rev));
+		far_beg = bns->anns[*rid].offset;
+		far_end = far_beg + bns->anns[*rid].len;
+		if (is_rev) { // flip to the reverse strand
+			int64_t tmp = far_beg;
+			far_beg = (bns->l_pac<<1) - far_end;
+			far_end = (bns->l_pac<<1) - tmp;
+		}
+		*beg = *beg > far_beg? *beg : far_beg;
+		*end = *end < far_end? *end : far_end;
+		bns_get_seq_gpu(bns->l_pac, pac, *beg, *end, &len, curr_gpu_batch);
+		if ( *end - *beg != len) // seq == 0 ||
+		{
+			fprintf(stderr, "[E::%s] begin=%ld, mid=%ld, end=%ld, len=%ld, rid=%d, far_beg=%ld, far_end=%ld\n",
+					__func__, (long)*beg, (long)mid, (long)*end, (long)len, *rid, (long)far_beg, (long)far_end);
+		}
+		assert( *end - *beg == len); // (seq &&) assertion failure should never happen
+		//return seq;
 	}
-	*beg = *beg > far_beg? *beg : far_beg;
-	*end = *end < far_end? *end : far_end;
-	bns_get_seq_gpu(bns->l_pac, pac, *beg, *end, &len, curr_gpu_batch);
-	if (/*seq == 0 ||*/ *end - *beg != len) {
-		fprintf(stderr, "[E::%s] begin=%ld, mid=%ld, end=%ld, len=%ld, rid=%d, far_beg=%ld, far_end=%ld\n",
-				__func__, (long)*beg, (long)mid, (long)*end, (long)len, *rid, (long)far_beg, (long)far_end);
-	}
-	assert(/*seq &&*/ *end - *beg == len); // assertion failure should never happen
-	//return seq;
-}
+*/
+/*
+	void bns_get_seq_gpu(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len, gpu_batch *curr_gpu_batch)
+	{
+		//uint8_t *seq = 0;
+		if (end < beg) end ^= beg, beg ^= end, end ^= beg; // if end is smaller, swap
+		if (end > l_pac<<1) end = l_pac<<1;
+		if (beg < 0) beg = 0;
+		if (beg >= l_pac || end <= l_pac) {
+			int64_t k, l = 0;
+			*len = end - beg;
+			//seq = malloc(end - beg);
+			if (beg >= l_pac) { // reverse strand
+				int64_t beg_f = (l_pac<<1) - 1 - end;
+				int64_t end_f = (l_pac<<1) - 1 - beg;
+				for (k = end_f; k > beg_f; --k) {
+					//seq[l++] = 3 - _get_pac(pac, k);
+					if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes)
+					{
+						// J.L. 2018-12-20 15:04 changed call for addbase
+						// J.L. 2019-01-18 12:30 emulating non-extensible host: curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = 3 - _get_pac(pac, k);
+						curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
+										curr_gpu_batch->n_target_batch, 
+										3 - (_get_pac(pac, k)), 
+										TARGET);
+					} else {
+						fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
+						exit(EXIT_FAILURE);
+					}
 
-uint8_t *bns_fetch_seq(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid)
+				}
+			} else { // forward strand
+				for (k = beg; k < end; ++k){
+					//seq[l++] = _get_pac(pac, k);
+					if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes)
+					{ 
+						// J.L. 2019-01-18 12:30 emulating non-extendable host: curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = _get_pac(pac, k);
+						curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
+										curr_gpu_batch->n_target_batch, 
+										_get_pac(pac, k), 
+										TARGET);
+
+					} else {
+						fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
+						exit(EXIT_FAILURE);
+					}
+				}
+			}
+		} else *len = 0; // if bridging the forward-reverse boundary, return nothing
+		//return seq;
+	}
+*/
+/*
+	void bns_fetch_seq_uint8(uint8_t *res, const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid)
+	{
+		int64_t far_beg, far_end, len;
+		int is_rev;
+		uint8_t *seq = NULL;
+
+		if (*end < *beg) *end ^= *beg, *beg ^= *end, *end ^= *beg; // if end is smaller, swap
+		assert(*beg <= mid && mid < *end);
+		*rid = bns_pos2rid(bns, bns_depos(bns, mid, &is_rev));
+		far_beg = bns->anns[*rid].offset;
+		far_end = far_beg + bns->anns[*rid].len;
+		if (is_rev) { // flip to the reverse strand
+			int64_t tmp = far_beg;
+			far_beg = (bns->l_pac<<1) - far_end;
+			far_end = (bns->l_pac<<1) - tmp;
+		}
+		*beg = *beg > far_beg? *beg : far_beg;
+		*end = *end < far_end? *end : far_end;
+		//bns_get_seq_uint8(seq, bns->l_pac, pac, *beg, *end, &len);
+
+		if (*end < *beg) *end ^= *beg, *beg ^= *end, *end ^= *beg; // if end is smaller, swap
+		if (*end > bns->l_pac<<1) *end = bns->l_pac<<1;
+		if (*beg < 0) *beg = 0;
+		if (*beg >= bns->l_pac || *end <= bns->l_pac) 
+		{
+			int64_t k, l = 0;
+			len = *end - *beg;
+			seq = malloc((*end - *beg) * sizeof(uint8_t));
+			if (*beg >= bns->l_pac) { // reverse strand
+				int64_t beg_f = (bns->l_pac<<1) - 1 - *end;
+				int64_t end_f = (bns->l_pac<<1) - 1 - *beg;
+				for (k = end_f; k > beg_f; --k)
+					seq[l++] = 3 - _get_pac(pac, k);
+			} else { // forward strand
+				for (k = *beg; k < *end; ++k)
+					seq[l++] = _get_pac(pac, k);
+			}
+		} else len = 0; // if bridging the forward-reverse boundary, return nothing
+
+		
+		if (seq == 0 || *end - *beg != len) {
+			fprintf(stderr, "[E::%s] begin=%ld, mid=%ld, end=%ld, len=%ld, seq=%p, rid=%d, far_beg=%ld, far_end=%ld\n",
+					__func__, (long)*beg, (long)mid, (long)*end, (long)len, seq, *rid, (long)far_beg, (long)far_end);
+		}
+		assert(seq && *end - *beg == len); // assertion failure should never happen
+		res = memcpy(res, seq, len * sizeof(uint8_t));
+	}
+*/
+
+
+
+const uint8_t *bns_fetch_seq(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, int64_t mid, int64_t *end, int *rid)
 {
 	int64_t far_beg, far_end, len;
 	int is_rev;
@@ -450,60 +555,7 @@ uint8_t *bns_fetch_seq(const bntseq_t *bns, const uint8_t *pac, int64_t *beg, in
 	return seq;
 }
 
-
-
-void bns_get_seq_gpu(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len, gpu_batch *curr_gpu_batch)
-{
-	//uint8_t *seq = 0;
-	if (end < beg) end ^= beg, beg ^= end, end ^= beg; // if end is smaller, swap
-	if (end > l_pac<<1) end = l_pac<<1;
-	if (beg < 0) beg = 0;
-	if (beg >= l_pac || end <= l_pac) {
-		int64_t k, l = 0;
-		*len = end - beg;
-		//seq = malloc(end - beg);
-		if (beg >= l_pac) { // reverse strand
-			int64_t beg_f = (l_pac<<1) - 1 - end;
-			int64_t end_f = (l_pac<<1) - 1 - beg;
-			for (k = end_f; k > beg_f; --k) {
-				//seq[l++] = 3 - _get_pac(pac, k);
-				if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes)
-				{
-					// J.L. 2018-12-20 15:04 changed call for addbase
-					// J.L. 2019-01-18 12:30 emulating non-extensible host: curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = 3 - _get_pac(pac, k);
-					curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
-									curr_gpu_batch->n_target_batch, 
-									3 - (_get_pac(pac, k)), 
-									TARGET);
-				} else {
-					fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
-					exit(EXIT_FAILURE);
-				}
-
-			}
-		} else { // forward strand
-			for (k = beg; k < end; ++k){
-				//seq[l++] = _get_pac(pac, k);
-				if (curr_gpu_batch->n_target_batch < curr_gpu_batch->gpu_storage->host_max_target_batch_bytes)
-				{ 
-					// J.L. 2019-01-18 12:30 emulating non-extendable host: curr_gpu_batch->gpu_storage->extensible_host_unpacked_target_batch->data[curr_gpu_batch->n_target_batch++] = _get_pac(pac, k);
-					curr_gpu_batch->n_target_batch = gasal_host_batch_addbase(curr_gpu_batch->gpu_storage, 
-									curr_gpu_batch->n_target_batch, 
-									 _get_pac(pac, k), 
-									TARGET);
-
-				} else {
-					fprintf(stderr, "The size of host target_batch (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_target_batch + 1, curr_gpu_batch->gpu_storage->host_max_target_batch_bytes);
-					exit(EXIT_FAILURE);
-				}
-			}
-		}
-	} else *len = 0; // if bridging the forward-reverse boundary, return nothing
-	//return seq;
-}
-
-
-uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len)
+const uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len)
 {
 	uint8_t *seq = 0;
 	if (end < beg) end ^= beg, beg ^= end, end ^= beg; // if end is smaller, swap
@@ -526,4 +578,29 @@ uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end
 	return seq;
 }
 
+/*
+void bns_get_seq_uint8(uint8_t *res, int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len)
+{
+	uint8_t *seq = 0;
+	if (end < beg) end ^= beg, beg ^= end, end ^= beg; // if end is smaller, swap
+	if (end > l_pac<<1) end = l_pac<<1;
+	if (beg < 0) beg = 0;
+	if (beg >= l_pac || end <= l_pac) {
+		int64_t k, l = 0;
+		*len = end - beg;
+		seq = malloc((end - beg) * sizeof(uint8_t));
+		if (beg >= l_pac) { // reverse strand
+			int64_t beg_f = (l_pac<<1) - 1 - end;
+			int64_t end_f = (l_pac<<1) - 1 - beg;
+			for (k = end_f; k > beg_f; --k)
+				seq[l++] = 3 - _get_pac(pac, k);
+		} else { // forward strand
+			for (k = beg; k < end; ++k)
+				seq[l++] = _get_pac(pac, k);
+		}
+	} else *len = 0; // if bridging the forward-reverse boundary, return nothing
 
+	assert(seq && end - beg == *len); // assertion failure should never happen
+	memcpy(res, seq, *len);
+}
+*/

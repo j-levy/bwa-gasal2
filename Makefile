@@ -8,6 +8,7 @@ GASAL_LIB_DIR = ./GASAL2/lib/
 GASAL_INCLUDE_DIR = ./GASAL2/include/
 #SHD_DIR=./src/shd_filter/
 #CC=clang --analyze
+#
 CFLAGS=-g -Wall -Wno-unused-function -o0 -msse4.2 -std=c++11 -fpermissive -fstack-protector-all 
 NVCCFLAGS=-g -lineinfo --gpu-architecture=compute_35 --gpu-code=sm_35 -O3 -Xcompiler -Wall -Xptxas -Werror --default-stream per-thread 
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
@@ -64,7 +65,7 @@ short-index: all
 		./$(PROG) index /data/work/jlevy/hg19_short/chr01.fasta
 
 short: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 150 -v 4 /data/work/jlevy/hg19_short/chr01.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 3 -l 1522 -v 4 /data/work/jlevy/hg19_short/chr01.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
 
 20k: all
 		./$(PROG) index fasta/target_batch.fasta
@@ -75,7 +76,7 @@ srr150index: all
 
 
 srr150: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 150 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 3 -l 150 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
 
 srr250: all
 	./$(PROG) gase_aln -g -t 12 -l 250 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > /data/work/jlevy/srr/250/res_bwa_gasal2.log
