@@ -1057,15 +1057,15 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
 
     // fillers for right extension. 
     cur->n_target_batch = gasal_host_batch_fill(cur->gpu_storage, 
-                                                                cur->n_target_batch,  
-                                                                ref_seq, 
-                                                                ref_seq_length, 
-                                                                TARGET);
+                                                cur->n_target_batch,  
+                                                ref_seq, 
+                                                ref_seq_length, 
+                                                TARGET);
     cur->n_query_batch = gasal_host_batch_fill( cur->gpu_storage,
-                                                                cur->n_query_batch, 
-                                                                read_seq, 
-                                                                read_seq_length, 
-                                                                QUERY);
+                                                cur->n_query_batch, 
+                                                read_seq, 
+                                                read_seq_length, 
+                                                QUERY);
 
     uint32_t ref_l_seq_with_p = cur->n_target_batch - prev_n_target_batch; 
     int read_l_seq_with_p = cur->n_query_batch - prev_n_query_batch;
@@ -1079,33 +1079,33 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
 
 inline void routine_test(gpu_batch *curr_gpu_batch, int curr_read_offset, int curr_ref_offset, int read_l_seq, int ref_l_seq)
 {
-                if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
-                    curr_gpu_batch->gpu_storage->host_query_batch_lens[curr_gpu_batch->n_seqs] = read_l_seq;
-                else {
-                    fprintf(stderr, "The size of host lens1 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
-                    exit(EXIT_FAILURE);
-                }
-                //kv_push(int, *read_seq_offsets, *curr_read_offset);
-                if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
-                    curr_gpu_batch->gpu_storage->host_query_batch_offsets[curr_gpu_batch->n_seqs] = curr_read_offset;
-                else {
-                    fprintf(stderr, "The size of host offsets1 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
-                    exit(EXIT_FAILURE);
-                }
-                //kv_push(int, *ref_seq_lens, (rmax[1] - rmax[0]));
-                if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
-                    curr_gpu_batch->gpu_storage->host_target_batch_lens[curr_gpu_batch->n_seqs] = ref_l_seq;
-                else {
-                    fprintf(stderr, "The size of host lens2 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
-                    exit(EXIT_FAILURE);
-                }
-                //kv_push(int, *ref_seq_offsets, *curr_ref_offset);
-                if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
-                    curr_gpu_batch->gpu_storage->host_target_batch_offsets[curr_gpu_batch->n_seqs] = curr_ref_offset;
-                else {
-                    fprintf(stderr, "The size of host offsets2 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
-                    exit(EXIT_FAILURE);
-                }
+    if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
+        curr_gpu_batch->gpu_storage->host_query_batch_lens[curr_gpu_batch->n_seqs] = read_l_seq;
+    else {
+        fprintf(stderr, "The size of host lens1 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
+        exit(EXIT_FAILURE);
+    }
+    //kv_push(int, *read_seq_offsets, *curr_read_offset);
+    if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
+        curr_gpu_batch->gpu_storage->host_query_batch_offsets[curr_gpu_batch->n_seqs] = curr_read_offset;
+    else {
+        fprintf(stderr, "The size of host offsets1 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
+        exit(EXIT_FAILURE);
+    }
+    //kv_push(int, *ref_seq_lens, (rmax[1] - rmax[0]));
+    if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
+        curr_gpu_batch->gpu_storage->host_target_batch_lens[curr_gpu_batch->n_seqs] = ref_l_seq;
+    else {
+        fprintf(stderr, "The size of host lens2 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
+        exit(EXIT_FAILURE);
+    }
+    //kv_push(int, *ref_seq_offsets, *curr_ref_offset);
+    if (curr_gpu_batch->n_seqs < curr_gpu_batch->gpu_storage->host_max_n_alns) 
+        curr_gpu_batch->gpu_storage->host_target_batch_offsets[curr_gpu_batch->n_seqs] = curr_ref_offset;
+    else {
+        fprintf(stderr, "The size of host offsets2 (%d) exceeds the allocation (%d)\n", curr_gpu_batch->n_seqs + 1, curr_gpu_batch->gpu_storage->host_max_n_alns);
+        exit(EXIT_FAILURE);
+    }
 }
 
 
@@ -1381,79 +1381,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         free(rseq);
 
         // a->score = a->truesc = s->score, a->qb = 0, a->rb = s->rbeg, a->qe = l_query, a->re = s->rbeg + s->len;
-
-        /* Original alignment. For reference only. Can be deleted anytime. */
-        /*
-            
-            if (bwa_verbose >= 4) 
-                err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg, bns->anns[c->rid].name);
-            if (s->qbeg) { // left extension
-                uint8_t *rs, *qs;
-                int qle, tle, gtle, gscore;
-
-                // ===NOTE: create local copy of beginning of query, reversed (because aligning left side, so from right to left!!)
-                qs = malloc(s->qbeg);
-                for (i = 0; i < s->qbeg; ++i) 
-                    qs[i] = query[s->qbeg - 1 - i];
-
-                // ===NOTE: create local copy of beginning of reference, reversed (because aligning left side, so from right to left!!)
-                tmp = s->rbeg - rmax[0];
-                rs = malloc(tmp);
-                for (i = 0; i < tmp; ++i) 
-                    rs[i] = rseq[tmp - 1 - i];
-                
-                for (i = 0; i < MAX_BAND_TRY; ++i) {
-                    int prev = a->score;
-                    aw[0] = opt->w << i;
-                    if (bwa_verbose >= 4) {
-                        int j;
-                        printf("*** Left ref:   "); for (j = 0; j < tmp; ++j) putchar("ACGTN"[(int)rs[j]]); putchar('\n');
-                        printf("*** Left query: "); for (j = 0; j < s->qbeg; ++j) putchar("ACGTN"[(int)qs[j]]); putchar('\n');
-                    }
-                    a->score = ksw_extend2(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, aw[0], opt->pen_clip5, opt->zdrop, s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
-                    if (bwa_verbose >= 4) { printf("*** Left extension: prev_score=%d; score=%d; bandwidth=%d; max_off_diagonal_dist=%d\n", prev, a->score, aw[0], max_off[0]); fflush(stdout); }
-                    if (a->score == prev || max_off[0] < (aw[0]>>1) + (aw[0]>>2)) break;
-                }
-                // check whether we prefer to reach the end of the query
-                if (gscore <= 0 || gscore <= a->score - opt->pen_clip5) { // local extension
-                    a->qb = s->qbeg - qle, a->rb = s->rbeg - tle;
-                    a->truesc = a->score;
-                } else { // to-end extension
-                    a->qb = 0, a->rb = s->rbeg - gtle;
-                    a->truesc = gscore;
-                }
-                free(qs); free(rs);
-            } else a->score = a->truesc = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
-
-            if (s->qbeg + s->len != l_query) { // right extension
-                int qle, tle, qe, re, gtle, gscore, sc0 = a->score;
-                qe = s->qbeg + s->len;
-                re = s->rbeg + s->len - rmax[0];
-                assert(re >= 0);
-                for (i = 0; i < MAX_BAND_TRY; ++i) {
-                    int prev = a->score;
-                    aw[1] = opt->w << i;
-                    if (bwa_verbose >= 4) {
-                        int j;
-                        printf("*** Right ref:   "); for (j = 0; j < rmax[1] - rmax[0] - re; ++j) putchar("ACGTN"[(int)rseq[re+j]]); putchar('\n');
-                        printf("*** Right query: "); for (j = 0; j < l_query - qe; ++j) putchar("ACGTN"[(int)query[qe+j]]); putchar('\n');
-                    }
-                    a->score = ksw_extend2(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, aw[1], opt->pen_clip3, opt->zdrop, sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
-                    if (bwa_verbose >= 4) { printf("*** Right extension: prev_score=%d; score=%d; bandwidth=%d; max_off_diagonal_dist=%d\n", prev, a->score, aw[1], max_off[1]); fflush(stdout); }
-                    if (a->score == prev || max_off[1] < (aw[1]>>1) + (aw[1]>>2)) break;
-                }
-                // similar to the above
-                if (gscore <= 0 || gscore <= a->score - opt->pen_clip3) { // local extension
-                    a->qe = qe + qle, a->re = rmax[0] + re + tle;
-                    a->truesc += a->score - sc0;
-                } else { // to-end extension
-                    a->qe = l_query, a->re = rmax[0] + re + gtle;
-                    a->truesc += gscore - sc0;
-                }
-            } else a->qe = l_query, a->re = s->rbeg + s->len;
-
-            if (bwa_verbose >= 4) printf("*** Added alignment region: [%d,%d) <=> [%ld,%ld); score=%d; {left,right}_bandwidth={%d,%d}\n", a->qb, a->qe, (long)a->rb, (long)a->re, a->score, aw[0], aw[1]);
-        */
 
 		// compute seedcov
 		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
@@ -1806,12 +1733,12 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     gpu_batch gpu_batch_short_arr[gpu_storage_vec->n];
     gpu_batch gpu_batch_long_arr[gpu_storage_vec->n];
 
-    for(j = 0; j < gpu_storage_vec[SHORT].n; j++) 
+    for(j = 0; j < gpu_storage_vec[SHORT].n; j++) // for all streams
     {
         gpu_batch_short_arr[j].gpu_storage = &(gpu_storage_vec[SHORT].a[j]);
     }
 
-    for(j = 0; j < gpu_storage_vec[LONG].n; j++) 
+    for(j = 0; j < gpu_storage_vec[LONG].n; j++) // for all streams
     {
         gpu_batch_long_arr[j].gpu_storage = &(gpu_storage_vec[LONG].a[j]);
     }
@@ -1828,7 +1755,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     double time_extend;
     //int total_internal_batches = 0;
 
-    while (internal_batch_done < internal_batch_count) {
+    while (internal_batch_done < internal_batch_count) 
+    {
         //fprintf(stderr, "internal_batch_done (%d) < internal_batch_count (%d)\n", internal_batch_done, internal_batch_count);
         int gpu_batch_arr_idx = 0;
         while(  gpu_batch_arr_idx != gpu_storage_vec[SHORT].n && 
@@ -1840,9 +1768,10 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         }
 
         int internal_batch_start_idx = batch_processed;
+        
         if (internal_batch_start_idx < batch_size && gpu_batch_arr_idx < gpu_storage_vec[SHORT].n && gpu_batch_arr_idx < gpu_storage_vec[LONG].n) 
 		{
-            //fprintf(stderr, "internal_batch_start_idx (%d) < batch_size (%d)\n", internal_batch_start_idx, batch_size);
+            fprintf(stderr, "internal_batch_start_idx (%d) < batch_size (%d)\n", internal_batch_start_idx, batch_size);
             gpu_batch_short_arr[gpu_batch_arr_idx].n_query_batch = 0;
             gpu_batch_short_arr[gpu_batch_arr_idx].n_target_batch = 0;
             gpu_batch_short_arr[gpu_batch_arr_idx].n_seqs = 0;
@@ -1944,13 +1873,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
         }//end if
 
-            
-        // FIXME: see why this assert doesnt pass
         assert(kv_size(regs_vec) == batch_processed);
-        // Note : this assert is not actually needed now, and there's no real way to assert the size... maybe.
-        fprintf(stderr, "kv_size(regs_vec), batch_processed = %d, %d\n", kv_size(regs_vec), batch_processed );
-        
-
         internal_batch_no++;
         //fprintf(stderr, "internal batch %d launched\n", internal_batch_no++);
         
@@ -1997,10 +1920,10 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                         //int read_pos = kv_A(read_seq_offsets, j);
                         //int read_len = kv_A(read_seq_lens, j);
                         //uint8_t* read_seq = &(kv_A(read_seq_batch, read_pos));
-                        if (cur->no_extend == 1) 
+                        if (cur->no_extend == 1)
                             fprintf(stderr, "I am here too as well with regs.n %d\n", regs.n);
 
-                        if (m == LONG) // reading a batch of SHORT alignments, so there must be TWO of them.
+                        if (m == LONG)
                         {
                             fprintf(stderr, "LONG batch got. r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
                             for(i = 0; i < regs.n; ++i)
