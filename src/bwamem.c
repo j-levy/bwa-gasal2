@@ -1952,16 +1952,12 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     {
                         int i;
                         mem_alnreg_v regs = kv_A(regs_vec, r);
-                        fprintf(stderr, "r=%d, regs.n=%d, regs.m=%d\n", r, regs.n, regs.m);
-                        //int read_pos = kv_A(read_seq_offsets, j);
-                        //int read_len = kv_A(read_seq_lens, j);
-                        //uint8_t* read_seq = &(kv_A(read_seq_batch, read_pos));
                         if (cur->no_extend == 1)
                             fprintf(stderr, "I am here too as well with regs.n %d\n", regs.n);
 
                         if (m == LONG)
                         {
-                            fprintf(stderr, "LONG batch got. r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
+                            fprintf(stderr, "LONG batch got. r=%d, regs.n=%d\n", r, regs.n);
                             for(i = 0; i < regs.n; ++i)
                             {
                                 mem_alnreg_t *a = &regs.a[i];
@@ -1987,11 +1983,10 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                                 }
                             }
                         } else { // reading a batch of SHORT alignment so there MIGHT be some of them which are single.
-                            fprintf(stderr, "SHORT batch got. r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
+                            fprintf(stderr, "SHORT batch got. r=%d, regs.n=%d\n", r, regs.n);
                             for(i = 0; i < regs.n; ++i)
                             {
                                 //FIXME: starting from here, invalid R/W
-                                fprintf(stderr, "&regs.a[i] with i=%d (with regs.n=%d)\n", i, regs.n);
                                 mem_alnreg_t *a = &regs.a[i];
 
                                 // if there's no short alignment for that sequence, skip to the next, until you find one
