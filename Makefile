@@ -76,7 +76,7 @@ srr150index: all
 
 
 srr150: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 3 -l 150 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 150 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
 
 srr250: all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 250 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > /data/work/jlevy/srr/250/res_bwa_gasal2.log

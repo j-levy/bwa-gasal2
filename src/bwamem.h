@@ -27,6 +27,7 @@ typedef struct __smem_i smem_i;
 #define LEFT (0)
 #define RIGHT (1)
 #define BOTH_LEFT_RIGHT (2)
+#define NO_LEFT_RIGHT (3)
 
 
 typedef struct {
