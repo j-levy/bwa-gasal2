@@ -27,7 +27,6 @@ typedef struct __smem_i smem_i;
 #define LEFT (0)
 #define RIGHT (1)
 #define BOTH_LEFT_RIGHT (2)
-#define NO_LEFT_RIGHT (3)
 
 
 typedef struct {
@@ -224,8 +223,10 @@ extern "C" {
 	void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *seq, void *buf, int batch_size, int batch_start_idx, mem_alnreg_v *w_regs, int tid, gasal_gpu_storage_v *gpu_storage_vec);
 
 
-    // J.L. 2019-02-22 added some prototypes
-    inline void routine_test(gpu_batch *curr_gpu_batch, int curr_read_offset, int curr_ref_offset, int read_l_seq, int ref_l_seq);
+
+	void part_printerz(reg_alnpart_t res, int SIDE);
+	void score_printerz(mem_alnreg_t *res);
+
 
 #ifdef __cplusplus
 }
