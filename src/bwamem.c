@@ -1257,7 +1257,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         if (bwa_verbose >= 4)
             err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg, bns->anns[c->rid].name);
 
-        uint32_t l_refer = rmax[1] - rmax[0] - 1;
+        uint32_t l_refer = rmax[1] - rmax[0];
 
         /*OK, starting from here, we compute all alignments as if they were 2 simple alignments:
         */
@@ -1802,7 +1802,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         
         if (internal_batch_start_idx < batch_size && gpu_stream_idx[SHORT] < gpu_storage_vec[SHORT].n && gpu_stream_idx[LONG] < gpu_storage_vec[LONG].n) 
 		{
-            fprintf(stderr, "internal_batch_start_idx (%d) < batch_size (%d)\n", internal_batch_start_idx, batch_size);
+            fprintf(stderr, "gpu_stream_idx=%d, internal_batch_start_idx (%d) < batch_size (%d)\n", gpu_stream_idx[SHORT], internal_batch_start_idx, batch_size);
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_query_batch = 0;
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_target_batch = 0;
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_seqs = 0;
@@ -1828,7 +1828,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 				
 				// convert to 2-bit encoding if we have not done so (was before in mem_gasal_fill but must be done before. Might be a bit slower, but separates the concerns.)
 				for (i = 0; i < read_l_seq; ++i)
-					read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]]; 
+					read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]];
 				
                 // ===NOTE: computing chains, store them in the mem_chain_v chn
                 chn = mem_chain(opt, bwt, bns, seq[j].l_seq, (uint8_t*)(read_seq), buf);
@@ -1843,7 +1843,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 // ===NOTE: CHAINS DONE. Fetching sequence for seeds
                 kv_init(regs);
                 for (i = 0; i < chn.n; ++i)  // for all chains
-                { 
+                {
                     mem_chain_t *p = &chn.a[i];
                     if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
                     /* ===NOTE: mem_chain2aln finds the seeds and fills the GPU. Should fill both sides. */
@@ -1926,10 +1926,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 //    fprintf(stderr, "x==%d\n", x);
                 //    fprintf(stderr, "cur->no_extend==%d\n", cur->no_extend);
                 //    fprintf(stderr, "cur->is_active==%d\n", cur->is_active);
-                if (cur->is_active == 0) 
-                {
-                    //continue; //nothing to do, the stream hasn't been used yet.
-                } else if ((x == 1 || cur->no_extend == 1) && cur->is_active == 1)
+                if ((x == 1 || cur->no_extend == 1) && cur->is_active == 1)
                 {
                     // J.L. 2018-12-21 15:21 changed calls with best score
                     int32_t *read_start = cur->gpu_storage->host_res->query_batch_start;
@@ -2004,10 +2001,10 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
                     } // end for (on batch_size)
                     cur->is_active = 0;
+                    internal_batch_done++;
                     //fprintf(stderr, "internal batch %d done\n", internal_batch_done - 1);
                 }
             }
-            internal_batch_done++;
             internal_batch_idx++;
         }
 
@@ -2033,9 +2030,11 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     a->re = a->ref_seed_begin + a->seedlen0 + a->part[RIGHT].ref_end+1;
                     a->truesc = a->score;
                     
-                    // cheat: beginning/end MIGHT be out-of-bound because of padding, so put it in-bounds instead.
-                    a->qb = (a->qb < 0 ? 0 : a->qb);
-                    a->qe = (a->qe > seq[j].l_seq ? seq[j].l_seq : a->qe);
+                    // FIXME: cheat: beginning/end MIGHT be out-of-bound because of padding, so put it in-bounds instead.
+                    
+                        a->qb = (a->qb < 0 ? 0 : a->qb);
+                        a->qe = (a->qe > seq[j].l_seq ? seq[j].l_seq : a->qe);
+                    
 
                     /*
                     a->rb = (a->rb < a->ref_seed_begin - a->seedlen0 ? a->ref_seed_begin - a->seedlen0 : a->rb);
