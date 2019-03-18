@@ -1190,8 +1190,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         {
             // the seed is (almost) contained in an existing alignment; further testing is needed to confirm it is not leading to a different aln
 			if (bwa_verbose >= 4)
-				printf("** Seed(%d) [%ld;%ld,%ld] is almost contained in an existing alignment [%d,%d) <=> [%ld,%ld)\n",
-						k, (long)s->len, (long)s->qbeg, (long)s->rbeg, av->a[i].qb, av->a[i].qe, (long)av->a[i].rb, (long)av->a[i].re);
+				printf("** Seed(%d) [%ld;%ld,%ld] is almost contained in an existing alignment [%d,%d) <=> [%ld,%ld)\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg, av->a[i].qb, av->a[i].qe, (long)av->a[i].rb, (long)av->a[i].re);
 			for (i = k + 1; i < c->n; ++i) { // check overlapping seeds in the same chain
 				const mem_seed_t *t;
 				if (srt[i] == 0) continue;
@@ -1298,12 +1297,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         a->ref_seed_begin = s->rbeg;
 
 
-        if (s->len == l_query) // no alignment needed.
-        {
-            a->align_sides = 0;
-            a->score = a->truesc = s->score, a->qb = 0, a->rb = s->rbeg, a->qe = l_query, a->re = s->rbeg + s->len;
-            
-        } else
         // Check if there's one or two extensions to do:
         if (left_query_length == 0 && right_query_length > 0) // it's a long, right extension.
         {
@@ -1327,9 +1320,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                 printf("*** Right query: "); for (j = 0; j < right_query_length; ++j) putchar("ACGTN"[(int) *(right_query + j)]); putchar('\n');
             }
             
-        } else 
-
-        if(left_query_length > 0 && right_query_length == 0) // it's a long, left extension.
+        } else if(left_query_length > 0 && right_query_length == 0) // it's a long, left extension.
         { 
             a->align_sides = 1;
             // left extension, long. No right extension, fill the right score with dummy values
@@ -1381,7 +1372,13 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                 printf("*** Right ref:   "); for (j = 0; j < right_refer_length; ++j) putchar("ACGTN"[(int) *(right_refer + j)]); putchar('\n');
                 printf("*** Right query: "); for (j = 0; j < right_query_length; ++j) putchar("ACGTN"[(int) *(right_query + j)]); putchar('\n');
             }
+        } else  // no alignment needed.
+        {
+            a->align_sides = 0;
+            a->score = a->truesc = s->score, a->qb = 0, a->rb = s->rbeg, a->qe = l_query, a->re = s->rbeg + s->len;
+            
         }
+
         if (left_refer != NULL && left_query != NULL)
         {
             free(left_refer); 
@@ -1765,12 +1762,14 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     {
         gpu_batch_short_arr[j].gpu_storage = &(gpu_storage_vec[SHORT].a[j]);
         gpu_batch_short_arr[j].is_active = 0;
+        gpu_batch_short_arr[j].no_extend = 0;
     }
 
     for(j = 0; j < gpu_storage_vec[LONG].n; j++) // for all streams
     {
         gpu_batch_long_arr[j].gpu_storage = &(gpu_storage_vec[LONG].a[j]);
         gpu_batch_long_arr[j].is_active = 0;
+        gpu_batch_long_arr[j].no_extend = 0;
     }
 
     // pointers to write loops easily
@@ -1826,7 +1825,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 char *read_seq = seq[j].seq;
 				int read_l_seq = seq[j].l_seq;
 				
-				// convert to 2-bit encoding if we have not done so (was before in mem_gasal_fill but must be done before. Might be a bit slower, but separates the concerns.)
+				// convert to decimal (0 to 4) encoding if we have not done so (was before in mem_gasal_fill but must be done before. Might be a bit slower, but separates the concerns.)
 				for (i = 0; i < read_l_seq; ++i)
 					read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]];
 				
@@ -1857,7 +1856,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 //smem_aux_destroy((smem_aux_t*)buf);
                 //buf = smem_aux_init();
             }// end if
-
+            // TODO: continue here 
             // ===NOTE: now, GASAL2 KERNEL LAUCNH ON BATCH
             // tried my best to make it readable. I know manipulating addresses can be confusing. Please don't be mad I just wanted to get rid of this.
             int side;
@@ -2022,7 +2021,6 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
                 if (a->seedlen0 != seq[j].l_seq && a->align_sides > 0) //kv_A(read_seq_lens, seq_idx)
                 { 
-
                     a->score = a->part[LEFT].score + a->part[RIGHT].score + a->score;
                     a->qb = a->query_seed_begin - a->part[LEFT].query_end;
                     a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end+1;
@@ -2060,6 +2058,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     p->is_alt = 1;
                 //free(kv_A(read_seqns, i));
             }
+            //FIXME: invalid write
             w_regs[j + batch_start_idx] = regs;
         }
 
