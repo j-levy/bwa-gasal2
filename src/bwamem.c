@@ -17,6 +17,7 @@
 #include "utils.h"
 #include "vector_filter.h"
 
+#include <vector>
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -1118,7 +1119,7 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
 
 
 // FIXME: check if it is alright to re-fetch the sequence every time (BWA doesn't do it, GASE does...)
-void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av, int *curr_read_offset, int *curr_ref_offset, gpu_batch *curr_gpu_batch_short, gpu_batch *curr_gpu_batch_long)
+void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *regs, int *curr_read_offset, int *curr_ref_offset, gpu_batch *curr_gpu_batch_short, gpu_batch *curr_gpu_batch_long)
 {
 	int i, k, rid, max_off[2], aw[2]; // aw: actual bandwidth used in extension
 	int64_t l_pac = bns->l_pac, rmax[2], ref_l_seq, read_l_seq, max = 0;
@@ -1165,9 +1166,9 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		mem_alnreg_t *a;
 		s = &c->seeds[(uint32_t)srt[k]];
 
-		for (i = 0; i < av->n; ++i)  // test whether extension has been made before
+		for (i = 0; i < regs->n; ++i)  // test whether extension has been made before
         {
-			mem_alnreg_t *p = &av->a[i];
+			mem_alnreg_t *p = &(regs->a[i]);
 			int64_t rd;
 			int qd, w, max_gap;
 			if (s->rbeg < p->rb_est || s->rbeg + s->len > p->re_est || s->qbeg < p->qb_est || s->qbeg + s->len > p->qe_est) continue; // not fully contained 
@@ -1186,11 +1187,11 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			w = max_gap < p->w? max_gap : p->w;
 			if (qd - rd < w && rd - qd < w) break;
 		}
-		if (i < av->n) 
+		if (i < regs->n) 
         {
             // the seed is (almost) contained in an existing alignment; further testing is needed to confirm it is not leading to a different aln
 			if (bwa_verbose >= 4)
-				printf("** Seed(%d) [%ld;%ld,%ld] is almost contained in an existing alignment [%d,%d) <=> [%ld,%ld)\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg, av->a[i].qb, av->a[i].qe, (long)av->a[i].rb, (long)av->a[i].re);
+				printf("** Seed(%d) [%ld;%ld,%ld] is almost contained in an existing alignment [%d,%d) <=> [%ld,%ld)\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg, regs->a[i].qb, regs->a[i].qe, (long)regs->a[i].rb, (long)regs->a[i].re);
 			for (i = k + 1; i < c->n; ++i) { // check overlapping seeds in the same chain
 				const mem_seed_t *t;
 				if (srt[i] == 0) continue;
@@ -1207,8 +1208,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				printf("** Seed(%d) might lead to a different alignment even though it is contained. Extension will be performed.\n", k);
 		}
 
-		a = kv_pushp(mem_alnreg_t, *av);
-		memset(a, 0, sizeof(mem_alnreg_t));
+        a = kv_pushp(mem_alnreg_t, *regs);
+		memset(a, 0, sizeof(mem_alnreg_t)); // SHOULD BE STILL OK EVEN THOUGH THERES A STRUCTURE INSIDE
 		a->w = aw[0] = aw[1] = opt->w;
 		a->score = a->truesc = -1;
 		a->rid = c->rid;
@@ -1743,10 +1744,11 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     extern time_struct *extension_time;
     extern uint64_t *no_of_extensions;
 
+    /* J.L. 2019-03-18 kv remove
     kvec_t(mem_alnreg_v) regs_vec;
     kv_init(regs_vec);
     kv_resize(mem_alnreg_v, regs_vec, batch_size);
-
+    */
     int GPU_READ_BATCH_SIZE;
     if (batch_size >= 4000) 
         GPU_READ_BATCH_SIZE = 1000;
@@ -1755,6 +1757,11 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     }
     int internal_batch_count = 0;
     internal_batch_count = (int)ceil(((double)batch_size)/((double)(GPU_READ_BATCH_SIZE)));
+
+    std::vector<mem_alnreg_v> regs_vec;
+    regs_vec.resize(batch_size);
+    regs_vec.clear();
+
     gpu_batch gpu_batch_short_arr[gpu_storage_vec->n];
     gpu_batch gpu_batch_long_arr[gpu_storage_vec->n];
 
@@ -1783,7 +1790,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     int internal_batch_no = 0;
     double time_extend;
     //int total_internal_batches = 0;
-    
+    //TODO: create an object vector to hold all regs from a gpu batch (easier to manipulate and think on)
 
     while (internal_batch_done < internal_batch_count) 
     {
@@ -1849,14 +1856,18 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     //  original call: mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &read_seq_lens, &read_seq_offsets, &curr_read_offset, &ref_seq_batch, &ref_seq_lens, &ref_seq_offsets, &curr_ref_offset);
                     mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, 
                                     curr_read_offset, curr_ref_offset, &gpu_batch_short_arr[gpu_stream_idx[SHORT]], &gpu_batch_long_arr[gpu_stream_idx[LONG]]);
+                     
                     free(chn.a[i].seeds);
                 }// end for
                 free(chn.a);
+                regs_vec.push_back(regs);
+                //fprintf(stderr, "pushed back a regs. regs_vec.size() (%d)\n", regs_vec.size());
+                /* J.L. 2019-03-18 kv remove
                 kv_push(mem_alnreg_v, regs_vec, regs);
+                */
                 //smem_aux_destroy((smem_aux_t*)buf);
                 //buf = smem_aux_init();
             }// end if
-            // TODO: continue here 
             // ===NOTE: now, GASAL2 KERNEL LAUCNH ON BATCH
             // tried my best to make it readable. I know manipulating addresses can be confusing. Please don't be mad I just wanted to get rid of this.
             int side;
@@ -1886,7 +1897,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     cur->no_extend = 0;
                 } else {
                     cur->no_extend = 1;
-                    mem_alnreg_v regs = kv_A(regs_vec, kv_size(regs_vec) - 1);
+                    mem_alnreg_v regs = regs_vec.back();// J.L. kv remove // kv_A(regs_vec, kv_size(regs_vec) - 1);
                     fprintf(stderr, "Thread no. %d is here with internal batch size %d, regs.n %d \n", tid, internal_batch_size, regs.n);
                 }
                 cur->batch_size = internal_batch_size;
@@ -1894,7 +1905,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 cur->is_active = 1;
             }
             batch_processed += internal_batch_size;
-            assert(kv_size(regs_vec) == batch_processed);
+            fprintf(stderr, "regs_vec.size() (%d) == batch_processed (%d)?\n", regs_vec.size(), batch_processed);
+            assert(regs_vec.size() == batch_processed); // J.L. kv remove kv_size(regs_vec) ==...
             internal_batch_no++;
         }//end if
         //fprintf(stderr, "internal batch %d launched\n", internal_batch_no++);
@@ -1938,7 +1950,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     for(j = 0, r = cur->batch_start; j < cur->batch_size; ++j, ++r)
                     {
                         int i;
-                        mem_alnreg_v regs = kv_A(regs_vec, r);
+                        mem_alnreg_v regs = regs_vec.at(r);
 
                         if (m == LONG)
                         {
@@ -2013,9 +2025,10 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         {
             int i;
             int seq_idx=0;
-            mem_alnreg_v regs = kv_A(regs_vec, j);
+            mem_alnreg_v regs = regs_vec.at(j); // J.L. kv remove kv_A(regs_vec, j); //FIXME: throws OOB
 
-            for(i = 0; i < regs.n; ++i){
+            for(i = 0; i < regs.n; ++i)
+            {
                 //FIXME: see why I don't have the good regs where they should. Probably linked to the score problem.
                 mem_alnreg_t *a = &regs.a[i];
                 //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
@@ -2064,7 +2077,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
         // results gathered
     }
-    kv_destroy(regs_vec);
+    //kv_destroy(regs_vec); //J.L. kv remove
 
     //fprintf(stderr, "--------------------------------------");
 }
