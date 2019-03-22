@@ -1924,6 +1924,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         //fprintf(stderr, "Current extension time of %d seeds on GPU by thread no. %d is %.3f usec\n", kv_size(ref_seq_lens), tid,  extension_time[tid]*1e6);
         int m;
         int internal_batch_idx = 0;
+        
         while (internal_batch_idx != gpu_storage_vec[SHORT].n) //loop over all streams to retrieve results of finished streams
         {
             for (m = 0; m < BOTH_SHORT_LONG; m++) // proceed both arrays, SHORT and LONG
@@ -1952,7 +1953,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     int32_t  *max_score = cur->gpu_storage->host_res->aln_score;
                     int32_t   *read_end = cur->gpu_storage->host_res->query_batch_end;
                     int32_t    *ref_end = cur->gpu_storage->host_res->target_batch_end;
-
+                    
+                    fprintf(stderr, "retrieve results on: (%s) + internal_batch_idx=%d, regs_vec.size=%d, j=(batch_start_idx=%d + internal_batch_start_idx=%d) for cur->batch_size=%d aligns\n ", (m==SHORT?"SHORT":"LONG"), internal_batch_idx,  regs_vec.size(), batch_start_idx, internal_batch_start_idx, cur->batch_size );
                     int seq_idx=0;
                     for(j = 0, r = cur->batch_start; j < cur->batch_size; ++j, ++r)
                     {
@@ -2018,19 +2020,21 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                         } // end if (LONG / SHORT)
 
                     } // end for (on cur->batch_size (up to 1000) (WHICH IS DIFFERENT FROM batch_size WHICH IS THE CPU BATCH, GOING TO 4000))
-                    cur->is_active = 0;
+                    cur->is_active = 2;
                     //internal_batch_done++;
                     //fprintf(stderr, "internal batch %d done\n", internal_batch_done - 1);
                 }
             }
-            if ((( gpu_batch_arr[SHORT]) + internal_batch_idx)->is_active == 0 && ((gpu_batch_arr[LONG]) + internal_batch_idx)->is_active == 0 )
+            if ((( gpu_batch_arr[SHORT]) + internal_batch_idx)->is_active == 2 && ((gpu_batch_arr[LONG]) + internal_batch_idx)->is_active == 2 )
             {
-                // gather results.
-                // fprintf(stderr, "gathering results on: regs_vec.size=%d, j=(batch_start_idx=%d + internal_batch_start_idx=%d) for cur->batch_size=%d aligns\n ", regs_vec.size(), batch_start_idx, internal_batch_start_idx, (( gpu_batch_arr[SHORT]) + internal_batch_idx)->batch_size );
-                //for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + (( gpu_batch_arr[SHORT]) + internal_batch_idx)->batch_size; ++j
-                gpu_batch *cur = ((gpu_batch_arr[m]) + internal_batch_idx);
+                 // gather results.
+                gpu_batch *cur =(( gpu_batch_arr[LONG]) + internal_batch_idx); // taking "long" but if there's an alignment the data is the same on long and short (abritrary)
+                fprintf(stderr, "gather results\n");
+                // FIXME: hangs here
+                
                 for (r = 0, j = cur->batch_start; r < cur->batch_size; ++j, ++r) //FIXME: use of uninitialized value of size 8 / Invalid read size 4
                 {
+                    fprintf(stderr, "r=%d, j=%d\n", r, j);
                     int i;
                     int seq_idx=0;
                     mem_alnreg_v regs = regs_vec.at(j); // J.L. kv remove kv_A(regs_vec, j);
@@ -2080,16 +2084,15 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     //FIXME: invalid write
                     w_regs[j + batch_start_idx] = regs;
                 }
-                internal_batch_idx++; // if BOTH SHORT LONG are done on this stream, go to next stream.
+                
+                internal_batch_done++;
             }
+            internal_batch_idx++; // if BOTH SHORT LONG are done on this stream, go to next stream.
         }
-
-        
-
         // results gathered
+        
     }
     //kv_destroy(regs_vec); //J.L. kv remove
-    internal_batch_done++;
     //fprintf(stderr, "--------------------------------------");
 }
 
