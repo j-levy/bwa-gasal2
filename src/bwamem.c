@@ -1085,35 +1085,16 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
     assert(read_l_seq_with_p == (read_seq_length%8 ? (read_seq_length) + (8 - (read_seq_length%8)) : read_seq_length));
     *curr_read_offset += read_l_seq_with_p;
     *curr_ref_offset +=  ref_l_seq_with_p;
-
     if (cur->n_seqs < cur->gpu_storage->host_max_n_alns) 
+    {
         cur->gpu_storage->host_query_batch_lens[cur->n_seqs] = read_seq_length;
-    else {
+        cur->gpu_storage->host_query_batch_offsets[cur->n_seqs] = *curr_read_offset;
+        cur->gpu_storage->host_target_batch_lens[cur->n_seqs] = ref_seq_length;
+        cur->gpu_storage->host_target_batch_offsets[cur->n_seqs] = *curr_ref_offset;
+    } else {
         fprintf(stderr, "The size of host lens1 (%d) exceeds the allocation (%d)\n", cur->n_seqs + 1, cur->gpu_storage->host_max_n_alns);
         exit(EXIT_FAILURE);
     }
-    //kv_push(int, *read_seq_offsets, *curr_read_offset);
-    if (cur->n_seqs < cur->gpu_storage->host_max_n_alns) 
-        cur->gpu_storage->host_query_batch_offsets[cur->n_seqs] = *curr_read_offset;
-    else {
-        fprintf(stderr, "The size of host offsets1 (%d) exceeds the allocation (%d)\n", cur->n_seqs + 1, cur->gpu_storage->host_max_n_alns);
-        exit(EXIT_FAILURE);
-    }
-    //kv_push(int, *ref_seq_lens, (rmax[1] - rmax[0]));
-    if (cur->n_seqs < cur->gpu_storage->host_max_n_alns) 
-        cur->gpu_storage->host_target_batch_lens[cur->n_seqs] = ref_seq_length;
-    else {
-        fprintf(stderr, "The size of host lens2 (%d) exceeds the allocation (%d)\n", cur->n_seqs + 1, cur->gpu_storage->host_max_n_alns);
-        exit(EXIT_FAILURE);
-    }
-    //kv_push(int, *ref_seq_offsets, *curr_ref_offset);
-    if (cur->n_seqs < cur->gpu_storage->host_max_n_alns) 
-        cur->gpu_storage->host_target_batch_offsets[cur->n_seqs] = *curr_ref_offset;
-    else {
-        fprintf(stderr, "The size of host offsets2 (%d) exceeds the allocation (%d)\n", cur->n_seqs + 1, cur->gpu_storage->host_max_n_alns);
-        exit(EXIT_FAILURE);
-    }
-
     cur->n_seqs++;
 }
 
@@ -1229,6 +1210,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				a->rb_est = l_pac;
 		}
 
+
 		// fetch data around the seed
         rmax[0] = l_pac<<1; 
         rmax[1] = 0;
@@ -1244,6 +1226,20 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             else 
                 rmax[0] = l_pac;
         }
+
+		if(s->len != l_query) {
+			int64_t rmax[2];
+			int rid;
+			rmax[0] = l_pac<<1; rmax[1] = 0;
+			rmax[0] = s->rbeg - (s->qbeg + cal_max_gap(opt, s->qbeg));
+			rmax[1] = s->rbeg + s->len + ((l_query - s->qbeg - s->len) + cal_max_gap(opt, l_query - s->qbeg - s->len));
+			rmax[0] = rmax[0] > 0? rmax[0] : 0;
+			rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
+			if (rmax[0] < l_pac && l_pac < rmax[1]) { // crossing the forward-reverse boundary; then choose one side
+				if (s->rbeg < l_pac) rmax[1] = l_pac; // this works because all seeds are guaranteed to be on the same strand
+				else rmax[0] = l_pac;
+			}
+        
 
         // J.L. 2019-02-16 : removed padder, switched to integrated GASAL function.
         uint8_t *rseq = NULL;
@@ -1385,6 +1381,10 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             free(left_refer); 
             free(left_query);
         }
+        free(rseq);
+        } else { //if s->len == l_query
+			a->score = a->truesc = s->score, a->qb = 0, a->rb = s->rbeg, a->qe = l_query, a->re = s->rbeg + s->len;
+		}
 
         if (bwa_verbose >= 4) 
             printf("*** Added alignment region: [%d,%d) <=> [%ld,%ld); score=%d\n", a->qb, a->qe, (long)a->rb, (long)a->re, a->score);
@@ -1416,7 +1416,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		a->seedlen0 = s->len;
 
 		a->frac_rep = c->frac_rep;
-        free(rseq);
+        
 	}
 	free(srt);
 }
@@ -1769,14 +1769,18 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     {
         gpu_batch_short_arr[j].gpu_storage = &(gpu_storage_vec[SHORT].a[j]);
         gpu_batch_short_arr[j].is_active = 0;
-        gpu_batch_short_arr[j].no_extend = 0;
+        gpu_batch_short_arr[j].no_extend = 1;
+        gpu_batch_short_arr[j].batch_size = 0;
+        gpu_batch_short_arr[j].batch_start = 0;
     }
 
     for(j = 0; j < gpu_storage_vec[LONG].n; j++) // for all streams
     {
         gpu_batch_long_arr[j].gpu_storage = &(gpu_storage_vec[LONG].a[j]);
         gpu_batch_long_arr[j].is_active = 0;
-        gpu_batch_long_arr[j].no_extend = 0;
+        gpu_batch_long_arr[j].no_extend = 1;
+        gpu_batch_short_arr[j].batch_size = 0;
+        gpu_batch_short_arr[j].batch_start = 0;
     }
 
     // pointers to write loops easily
@@ -1789,6 +1793,9 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     int batch_processed = 0;
     int internal_batch_no = 0;
     double time_extend;
+
+    int batch_id = 0;//this is to gather two batches with the same id for left-right extension
+
     //int total_internal_batches = 0;
     //TODO: create an object vector to hold all regs from a gpu batch (easier to manipulate and think on)
 
@@ -1848,15 +1855,12 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
                 // ===NOTE: CHAINS DONE. Fetching sequence for seeds
                 kv_init(regs);
-                for (i = 0; i < chn.n; ++i)  // for all chains
+                for (i = 0; i < chn.n; ++i)  // for all chains (each chain contains mulitple seeds, processed in mem_chain2aln)
                 {
                     mem_chain_t *p = &chn.a[i];
                     if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
-                    /* ===NOTE: mem_chain2aln finds the seeds and fills the GPU. Should fill both sides. */
-                    //  original call: mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &read_seq_lens, &read_seq_offsets, &curr_read_offset, &ref_seq_batch, &ref_seq_lens, &ref_seq_offsets, &curr_ref_offset);
                     mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, 
                                     curr_read_offset, curr_ref_offset, &gpu_batch_short_arr[gpu_stream_idx[SHORT]], &gpu_batch_long_arr[gpu_stream_idx[LONG]]);
-                     
                     free(chn.a[i].seeds);
                 }// end for
                 free(chn.a);
@@ -1865,11 +1869,10 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 /* J.L. 2019-03-18 kv remove
                 kv_push(mem_alnreg_v, regs_vec, regs);
                 */
-                //smem_aux_destroy((smem_aux_t*)buf);
-                //buf = smem_aux_init();
             }// end if
+
             // ===NOTE: now, GASAL2 KERNEL LAUCNH ON BATCH
-            // tried my best to make it readable. I know manipulating addresses can be confusing. Please don't be mad I just wanted to get rid of this.
+            // tried my best to make it readable. I know manipulating addresses can be confusing. Please don't be mad
             int side;
             for(side=0; side < BOTH_SHORT_LONG; ++side)
             {
@@ -1888,11 +1891,11 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     args->semiglobal_skipping_head = NONE;
                     args->semiglobal_skipping_tail = BOTH;
 
-                    args->start_pos = WITH_START;
+                    args->start_pos = WITH_START; // actually "without start" would be sufficient...
 
                     // launch alignment processes
                     gasal_aln_async(cur->gpu_storage, cur->n_query_batch, cur->n_target_batch, cur->n_seqs, args);
-                    fprintf(stderr, "cur->gpu_storage->is_free = %d (should be 0)\n", cur->gpu_storage->is_free);
+
                     extension_time[tid].aln_kernel += (realtime() - time_extend);
                     cur->no_extend = 0;
                 } else {
@@ -1903,7 +1906,11 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 cur->batch_size = internal_batch_size;
                 cur->batch_start = internal_batch_start_idx;
                 cur->is_active = 1;
+                fprintf(stderr, "batch (%s) launched with batch_size=%d, n_seqs=%d alingments, with n_query_batch=%d, n_target_batch=%d\n", (side==SHORT?"SHORT":"LONG"), cur->batch_size, cur->n_seqs, cur->n_query_batch, cur->n_target_batch );
+
             }
+            batch_id++; 
+
             batch_processed += internal_batch_size;
             fprintf(stderr, "regs_vec.size() (%d) == batch_processed (%d)?\n", regs_vec.size(), batch_processed);
             assert(regs_vec.size() == batch_processed); // J.L. kv remove kv_size(regs_vec) ==...
@@ -1917,7 +1924,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         //fprintf(stderr, "Current extension time of %d seeds on GPU by thread no. %d is %.3f usec\n", kv_size(ref_seq_lens), tid,  extension_time[tid]*1e6);
         int m;
         int internal_batch_idx = 0;
-        while (internal_batch_idx != gpu_storage_vec[SHORT].n) 
+        while (internal_batch_idx != gpu_storage_vec[SHORT].n) //loop over all streams to retrieve results of finished streams
         {
             for (m = 0; m < BOTH_SHORT_LONG; m++) // proceed both arrays, SHORT and LONG
             {
@@ -2010,75 +2017,79 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                             } // end for (regs)
                         } // end if (LONG / SHORT)
 
-                    } // end for (on batch_size)
+                    } // end for (on cur->batch_size (up to 1000) (WHICH IS DIFFERENT FROM batch_size WHICH IS THE CPU BATCH, GOING TO 4000))
                     cur->is_active = 0;
-                    internal_batch_done++;
+                    //internal_batch_done++;
                     //fprintf(stderr, "internal batch %d done\n", internal_batch_done - 1);
                 }
             }
-            internal_batch_idx++;
-        }
-
-        // gather results
-
-        for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + batch_size; ++j)
-        {
-            int i;
-            int seq_idx=0;
-            mem_alnreg_v regs = regs_vec.at(j); // J.L. kv remove kv_A(regs_vec, j); //FIXME: throws OOB
-
-            for(i = 0; i < regs.n; ++i)
+            if ((( gpu_batch_arr[SHORT]) + internal_batch_idx)->is_active == 0 && ((gpu_batch_arr[LONG]) + internal_batch_idx)->is_active == 0 )
             {
-                //FIXME: see why I don't have the good regs where they should. Probably linked to the score problem.
-                mem_alnreg_t *a = &regs.a[i];
-                //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
-                if (a->seedlen0 != seq[j].l_seq && a->align_sides > 0) //kv_A(read_seq_lens, seq_idx)
-                { 
-                    a->score = a->part[LEFT].score + a->part[RIGHT].score + a->score;
-                    a->qb = a->query_seed_begin - a->part[LEFT].query_end;
-                    a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end+1;
-                    a->rb = a->ref_seed_begin - a->part[LEFT].ref_end;
-                    a->re = a->ref_seed_begin + a->seedlen0 + a->part[RIGHT].ref_end+1;
-                    a->truesc = a->score;
-                    
-                    // FIXME: cheat: beginning/end MIGHT be out-of-bound because of padding, so put it in-bounds instead.
-                    
-                        a->qb = (a->qb < 0 ? 0 : a->qb);
-                        a->qe = (a->qe > seq[j].l_seq ? seq[j].l_seq : a->qe);
-                    
+                // gather results.
+                // fprintf(stderr, "gathering results on: regs_vec.size=%d, j=(batch_start_idx=%d + internal_batch_start_idx=%d) for cur->batch_size=%d aligns\n ", regs_vec.size(), batch_start_idx, internal_batch_start_idx, (( gpu_batch_arr[SHORT]) + internal_batch_idx)->batch_size );
+                //for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + (( gpu_batch_arr[SHORT]) + internal_batch_idx)->batch_size; ++j
+                gpu_batch *cur = ((gpu_batch_arr[m]) + internal_batch_idx);
+                for (r = 0, j = cur->batch_start; r < cur->batch_size; ++j, ++r) //FIXME: use of uninitialized value of size 8 / Invalid read size 4
+                {
+                    int i;
+                    int seq_idx=0;
+                    mem_alnreg_v regs = regs_vec.at(j); // J.L. kv remove kv_A(regs_vec, j);
 
-                    /*
-                    a->rb = (a->rb < a->ref_seed_begin - a->seedlen0 ? a->ref_seed_begin - a->seedlen0 : a->rb);
-                    */
-                    //score_printerz(a);
+                    for(i = 0; i < regs.n; ++i)
+                    {
+                        //FIXME: see why I don't have the good regs where they should. Probably linked to the score problem.
+                        mem_alnreg_t *a = &regs.a[i];
+                        //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
+                        if (a->seedlen0 != seq[j].l_seq && a->align_sides > 0) //kv_A(read_seq_lens, seq_idx)
+                        { 
+                            a->score = a->part[LEFT].score + a->part[RIGHT].score + a->score;
+                            a->qb = a->query_seed_begin - a->part[LEFT].query_end;
+                            a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end+1;
+                            a->rb = a->ref_seed_begin - a->part[LEFT].ref_end;
+                            a->re = a->ref_seed_begin + a->seedlen0 + a->part[RIGHT].ref_end+1;
+                            a->truesc = a->score;
+                            
+                            // FIXME: cheat: beginning/end MIGHT be out-of-bound because of padding, so put it in-bounds instead.
+                            
+                                a->qb = (a->qb < 0 ? 0 : a->qb);
+                                a->qe = (a->qe > seq[j].l_seq ? seq[j].l_seq : a->qe);
+                            /*
+                            a->rb = (a->rb < a->ref_seed_begin - a->seedlen0 ? a->ref_seed_begin - a->seedlen0 : a->rb);
+                            */
+                            //score_printerz(a);
 
-                    seq_idx++;
+                            seq_idx++;
+                        }
+                        //free(a);
+                    }
+                    
+                    regs.n = mem_sort_dedup_patch(opt, bns, pac,(uint8_t*)(seq[j].seq), regs.n, regs.a);
+                    if (bwa_verbose >= 4) {
+                        err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
+                        for (i = 0; i < regs.n; ++i) {
+                            mem_alnreg_t *p = &regs.a[i];
+                            printf("** %d, [%d,%d) <=> [%ld,%ld)\n", p->score, p->qb, p->qe, (long)p->rb, (long)p->re);
+                        }
+                    }
+                    for (i = 0; i < regs.n; ++i) {
+                        mem_alnreg_t *p = &regs.a[i];
+                        if (p->rid >= 0 && bns->anns[p->rid].is_alt)
+                            p->is_alt = 1;
+                        //free(kv_A(read_seqns, i));
+                    }
+                    //FIXME: invalid write
+                    w_regs[j + batch_start_idx] = regs;
                 }
-                //free(a);
+                internal_batch_idx++; // if BOTH SHORT LONG are done on this stream, go to next stream.
             }
-            
-            regs.n = mem_sort_dedup_patch(opt, bns, pac,(uint8_t*)(seq[j].seq), regs.n, regs.a);
-            if (bwa_verbose >= 4) {
-                err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
-                for (i = 0; i < regs.n; ++i) {
-                    mem_alnreg_t *p = &regs.a[i];
-                    printf("** %d, [%d,%d) <=> [%ld,%ld)\n", p->score, p->qb, p->qe, (long)p->rb, (long)p->re);
-                }
-            }
-            for (i = 0; i < regs.n; ++i) {
-                mem_alnreg_t *p = &regs.a[i];
-                if (p->rid >= 0 && bns->anns[p->rid].is_alt)
-                    p->is_alt = 1;
-                //free(kv_A(read_seqns, i));
-            }
-            //FIXME: invalid write
-            w_regs[j + batch_start_idx] = regs;
         }
+
+        
 
         // results gathered
     }
     //kv_destroy(regs_vec); //J.L. kv remove
-
+    internal_batch_done++;
     //fprintf(stderr, "--------------------------------------");
 }
 
