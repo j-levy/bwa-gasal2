@@ -38,7 +38,7 @@ LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
 
-VALGRIND=valgrind --track-origins=yes 
+VALGRIND=valgrind
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
 
 ifeq ($(shell uname -s),Linux)

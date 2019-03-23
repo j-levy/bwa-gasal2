@@ -2029,19 +2029,18 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             {
                  // gather results.
                 gpu_batch *cur =(( gpu_batch_arr[LONG]) + internal_batch_idx); // taking "long" but if there's an alignment the data is the same on long and short (abritrary)
-                fprintf(stderr, "gather results\n");
-                // FIXME: hangs here
+                // fprintf(stderr, "gather results\n");
                 
-                for (r = 0, j = cur->batch_start; r < cur->batch_size; ++j, ++r) //FIXME: use of uninitialized value of size 8 / Invalid read size 4
+                for (r = 0, j = cur->batch_start; r < cur->batch_size; ++j, ++r)
                 {
-                    fprintf(stderr, "r=%d, j=%d\n", r, j);
+                    //fprintf(stderr, "r=%d, j=%d\n", r, j);
                     int i;
                     int seq_idx=0;
                     mem_alnreg_v regs = regs_vec.at(j); // J.L. kv remove kv_A(regs_vec, j);
 
                     for(i = 0; i < regs.n; ++i)
                     {
-                        //FIXME: see why I don't have the good regs where they should. Probably linked to the score problem.
+                        //FIXME: score problem?
                         mem_alnreg_t *a = &regs.a[i];
                         //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
                         if (a->seedlen0 != seq[j].l_seq && a->align_sides > 0) //kv_A(read_seq_lens, seq_idx)
@@ -2060,7 +2059,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                             /*
                             a->rb = (a->rb < a->ref_seed_begin - a->seedlen0 ? a->ref_seed_begin - a->seedlen0 : a->rb);
                             */
-                            //score_printerz(a);
+                            score_printerz(a);
 
                             seq_idx++;
                         }
@@ -2081,7 +2080,6 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                             p->is_alt = 1;
                         //free(kv_A(read_seqns, i));
                     }
-                    //FIXME: invalid write
                     w_regs[j + batch_start_idx] = regs;
                 }
                 
