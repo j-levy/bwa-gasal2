@@ -14,7 +14,7 @@
 #include "kseq.h"
 
 // J.L. 2019-01-13 - select GPU when using more than one. Use the first available (0) by default.
-#define GPU_SELECT (0)
+#define GPU_SELECT (1)
 #define NB_STREAMS (2)
 
 KSEQ_DECLARE(gzFile)

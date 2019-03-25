@@ -48,17 +48,19 @@
 
 	void part_printerz(reg_alnpart_t res, int SIDE)
 	{
-		fprintf(stderr, "===[PART_PRINT %s] query_end = (%d), ref_end = (%d), score = (%d)\n", (SIDE == LEFT ? " LEFT" : "RIGHT"), res.query_end, res.ref_end, res.score);
+		fprintf(stderr, "\t\t[PART_PRINT %s] query_end = (%d), ref_end = (%d), score = (%d)\n", (SIDE == LEFT ? " LEFT" : "RIGHT"), res.query_end, res.ref_end, res.score);
 	}
 
 	void score_printerz(mem_alnreg_t *res)
 	{
-        fprintf(stderr, "##### SCORE PRINTER #####\n");
-		part_printerz(res->part[LEFT], LEFT);
+        //fprintf(stderr, "##### SCORE PRINTER #####\n");
+
+        fprintf(stderr, "\t[SCOR_PRINT] align_sides=%d, where_is_long=%s\n", res->align_sides, (res->where_is_long == LEFT ? " LEFT" : "RIGHT"));
+		fprintf(stderr, "\t[SCOR_PRINT] qb, qe = (%d, %d), rb, re = (%d, %d), score, truesc = (%d, %d), \n", res->qb, res->qe, res->rb, res->re, res->score, res->truesc);
+        fprintf(stderr, "\t[SCOR_PRINT] query_seed_begin=%d, ref_seed_begin=%d, seedlen0=%d\n", res->query_seed_begin, res->ref_seed_begin, res->seedlen0);
+        part_printerz(res->part[LEFT], LEFT);
 		part_printerz(res->part[RIGHT], RIGHT);
-        fprintf(stderr, "[SCOR_PRINT] align_sides=%d, where_is_long=%s\n", res->align_sides, (res->where_is_long == LEFT ? " LEFT" : "RIGHT"));
-		fprintf(stderr, "[SCOR_PRINT] qb, qe = (%d, %d), rb, re = (%d, %d), score, truesc = (%d, %d), \n", res->qb, res->qe, res->rb, res->re, res->score, res->truesc);
-        fprintf(stderr, "[SCOR_PRINT] query_seed_begin=%d, ref_seed_begin=%d, seedlen0=%d\n", res->query_seed_begin, res->ref_seed_begin, res->seedlen0);
+        fprintf(stderr, "\n");
 	}
 
 static const bntseq_t *global_bns = 0; // for debugging only
@@ -1120,7 +1122,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         e = t->rbeg + t->len + ((l_query - t->qbeg - t->len) + cal_max_gap(opt, l_query - t->qbeg - t->len));
         rmax[0] = rmax[0] < b? rmax[0] : b;
         rmax[1] = rmax[1] > e? rmax[1] : e;
-        if (t->len > max) 
+        if (t->len > max)
             max = t->len;
     }
 
@@ -1227,7 +1229,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                 rmax[0] = l_pac;
         }
 
-		if(s->len != l_query) {
 			int64_t rmax[2];
 			int rid;
 			rmax[0] = l_pac<<1; rmax[1] = 0;
@@ -1288,12 +1289,13 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         }
 
         // initial seed score and other useful values
-        a->score = s->score;
+        a->score = s->len;
         a->truesc = a->score;
         a->query_seed_begin = s->qbeg;
         a->ref_seed_begin = s->rbeg;
 
-
+        
+        // ALIGN
         // Check if there's one or two extensions to do:
         if (left_query_length == 0 && right_query_length > 0) // it's a long, right extension.
         {
@@ -1382,9 +1384,9 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             free(left_query);
         }
         free(rseq);
-        } else { //if s->len == l_query
-			a->score = a->truesc = s->score, a->qb = 0, a->rb = s->rbeg, a->qe = l_query, a->re = s->rbeg + s->len;
-		}
+        
+        fprintf(stderr, "align %d\tquery:\t<%d>\t[%d]\t<%d>\trefer:\t<%d>\t[%d]\t<%d>\tsides=%d\tLong=%s\n", k, left_query_length, s->len, right_query_length, left_refer_length, s->len, right_refer_length, a->align_sides,(a->where_is_long==LEFT?"LEFT":"RIGHT"));
+
 
         if (bwa_verbose >= 4) 
             printf("*** Added alignment region: [%d,%d) <=> [%ld,%ld); score=%d\n", a->qb, a->qe, (long)a->rb, (long)a->re, a->score);
@@ -1402,10 +1404,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long) s->len, (long) s->qbeg, (long) s->rbeg, bns->anns[c->rid].name);
         a->rseq_beg = rmax[0] /*+ rseq_beg*/;
 
+
         
-
-        // a->score = a->truesc = s->score, a->qb = 0, a->rb = s->rbeg, a->qe = l_query, a->re = s->rbeg + s->len;
-
 		// compute seedcov
 		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
 			const mem_seed_t *t = &c->seeds[i];
@@ -1416,7 +1416,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		a->seedlen0 = s->len;
 
 		a->frac_rep = c->frac_rep;
-        
+
 	}
 	free(srt);
 }
@@ -1797,8 +1797,6 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     int batch_id = 0;//this is to gather two batches with the same id for left-right extension
 
     //int total_internal_batches = 0;
-    //TODO: create an object vector to hold all regs from a gpu batch (easier to manipulate and think on)
-
     while (internal_batch_done < internal_batch_count) 
     {
         //fprintf(stderr, "internal_batch_done (%d) < internal_batch_count (%d)\n", internal_batch_done, internal_batch_count);
@@ -1888,8 +1886,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     Parameters *args;
                     args = new Parameters(0, NULL);
                     args->algo = LOCAL;
-                    args->semiglobal_skipping_head = NONE;
-                    args->semiglobal_skipping_tail = BOTH;
+                    args->semiglobal_skipping_head = TARGET;
+                    args->semiglobal_skipping_tail = TARGET;
 
                     args->start_pos = WITH_START; // actually "without start" would be sufficient...
 
@@ -1968,7 +1966,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                             {
                                 mem_alnreg_t *a = &regs.a[i];
 
-                                if (a->seedlen0 != seq[r].l_seq/*kv_A(read_seq_lens, seq_idx)*/)
+                                if (a->seedlen0 != seq[r].l_seq && a->align_sides > 0/*kv_A(read_seq_lens, seq_idx)*/)
                                 {
                                     // it's written badly, but it makes it readable. Could be condensed later. with a->part[a->where_is_long] 
                                     if (a->where_is_long == RIGHT)
@@ -2048,19 +2046,16 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                             a->score = a->part[LEFT].score + a->part[RIGHT].score + a->score;
                             a->qb = a->query_seed_begin - a->part[LEFT].query_end;
                             a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end+1;
-                            a->rb = a->ref_seed_begin - a->part[LEFT].ref_end;
-                            a->re = a->ref_seed_begin + a->seedlen0 + a->part[RIGHT].ref_end+1;
+                            a->rb = a->rseq_beg - a->part[LEFT].ref_end;
+                            a->re = a->rseq_beg + a->seedlen0 + a->part[RIGHT].ref_end+1;
                             a->truesc = a->score;
                             
+                            score_printerz(a);
                             // FIXME: cheat: beginning/end MIGHT be out-of-bound because of padding, so put it in-bounds instead.
                             
                                 a->qb = (a->qb < 0 ? 0 : a->qb);
                                 a->qe = (a->qe > seq[j].l_seq ? seq[j].l_seq : a->qe);
-                            /*
-                            a->rb = (a->rb < a->ref_seed_begin - a->seedlen0 ? a->ref_seed_begin - a->seedlen0 : a->rb);
-                            */
-                            score_printerz(a);
-
+                            /**/
                             seq_idx++;
                         }
                         //free(a);
