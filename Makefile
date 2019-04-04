@@ -65,7 +65,7 @@ short-index: all
 		./$(PROG) index /data/work/jlevy/hg19_short/chr1p1.fasta
 
 short: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 150 -v 4 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 4 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
 
 20k: all
 		./$(PROG) index fasta/target_batch.fasta
@@ -76,7 +76,7 @@ srr150index: all
 
 
 srr150: all
-		 $(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 157 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+		 $(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 300 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
 
 #typing numbers is annoying
 srr: srr150
