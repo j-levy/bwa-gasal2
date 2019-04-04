@@ -1146,7 +1146,7 @@ void mem_gasal_fill(gpu_batch *cur, int read_l_seq, char *read_seq, int read_l_s
 	
 }
 
-void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref_seq_length, int read_seq_length, int *curr_ref_offset, int *curr_read_offset)
+void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref_seq_length, int read_seq_length, int *curr_ref_offset, int *curr_read_offset, int seed_score)
 {
     
     uint32_t prev_n_target_batch = cur->n_target_batch;
@@ -1175,7 +1175,9 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
     mem_gasal_fill(cur, read_seq_length, read_seq, read_l_seq_with_p, QUERY);
     mem_gasal_fill(cur, ref_seq_length, ref_seq, ref_l_seq_with_p, TARGET);
     */
-
+    
+    // Normally this test should not be used anymore since the max_n_aln is enlarged when needed by  gasal_host_batch_fill.
+    // The thing is, you may have more alignments, but shorter ones. 
     if (cur->n_seqs < cur->gpu_storage->host_max_n_alns) 
     {
         cur->gpu_storage->host_query_batch_lens[cur->n_seqs] = read_seq_length;
@@ -1185,6 +1187,12 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
         fprintf(stderr, "The size of host lens1 (%d) exceeds the allocation (%d)\n", cur->n_seqs + 1, cur->gpu_storage->host_max_n_alns);
         exit(EXIT_FAILURE);
     }
+    
+
+    cur->gpu_storage->host_query_batch_lens[cur->n_seqs] = read_seq_length;
+    cur->gpu_storage->host_target_batch_lens[cur->n_seqs] = ref_seq_length;
+
+    cur->gpu_storage->host_seed_scores[cur->n_seqs] = seed_score;
 
     *curr_read_offset += cur->n_query_batch - prev_n_query_batch;
     *curr_ref_offset += cur->n_target_batch - prev_n_target_batch;
@@ -1396,7 +1404,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             fill_extension(curr_gpu_batch_long, 
                             right_refer, right_query, 
                             right_refer_length, right_query_length, 
-                            &curr_ref_offset[LONG], &curr_read_offset[LONG]);
+                            &curr_ref_offset[LONG], &curr_read_offset[LONG],
+                            s->len);
             a->where_is_long = RIGHT;
 
             a->part[LEFT].query_begin = 0;
@@ -1419,7 +1428,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             fill_extension(curr_gpu_batch_long, 
                             left_refer, left_query, 
                             left_refer_length, left_query_length, 
-                            &curr_read_offset[LONG], &curr_ref_offset[LONG]);
+                            &curr_read_offset[LONG], &curr_ref_offset[LONG],
+                            s->len);
             a->where_is_long = LEFT;
 
             a->part[RIGHT].query_begin = 0;
@@ -1438,11 +1448,13 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                 fill_extension(curr_gpu_batch_short, 
                                 left_refer, left_query, 
                                 left_refer_length, left_query_length, 
-                                &curr_read_offset[SHORT], &curr_ref_offset[SHORT]);
+                                &curr_read_offset[SHORT], &curr_ref_offset[SHORT],
+                                s->len);
                 fill_extension(curr_gpu_batch_long, 
                                 right_refer, right_query, 
                                 right_refer_length, right_query_length, 
-                                &curr_ref_offset[LONG], &curr_read_offset[LONG]);
+                                &curr_ref_offset[LONG], &curr_read_offset[LONG],
+                                s->len);
                 a->where_is_long = RIGHT;
 
             } else {
@@ -1451,11 +1463,13 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
                 fill_extension(curr_gpu_batch_long, 
                                 left_refer, left_query, 
                                 left_refer_length, left_query_length, 
-                                &curr_read_offset[LONG], &curr_ref_offset[LONG]);
+                                &curr_read_offset[LONG], &curr_ref_offset[LONG],
+                                s->len);
                 fill_extension(curr_gpu_batch_short, 
                                 right_refer, right_query, 
                                 right_refer_length, right_query_length, 
-                                &curr_ref_offset[SHORT], &curr_read_offset[SHORT]);
+                                &curr_ref_offset[SHORT], &curr_read_offset[SHORT],
+                                s->len);
                 a->where_is_long = LEFT;
             }
             if (bwa_verbose >= 4) {
@@ -1907,6 +1921,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 		{
             #ifdef DEBUG
             fprintf(stderr, "gpu_stream_idx=%d, internal_batch_start_idx (%d) < batch_size (%d)\n", gpu_stream_idx[SHORT], internal_batch_start_idx, batch_size);
+            
             #endif
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_query_batch = 0;
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_target_batch = 0;
@@ -1983,7 +1998,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     args->semiglobal_skipping_head = TARGET;
                     args->semiglobal_skipping_tail = TARGET;
 
-                    args->start_pos = WITHOUT_START; // actually "without start" would be sufficient...
+                    args->start_pos = WITH_START; // actually "without start" would be sufficient...
 
                     // launch alignment processes
                     gasal_aln_async(cur->gpu_storage, cur->n_query_batch, cur->n_target_batch, cur->n_seqs, args);
@@ -2139,7 +2154,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                         //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
                         if (a->seedlen0 != seq[j].l_seq && a->align_sides > 0) //kv_A(read_seq_lens, seq_idx)
                         { 
-                            a->score = a->part[LEFT].score + a->part[RIGHT].score + a->score;
+                            a->score = a->part[LEFT].score + a->part[RIGHT].score;
+                            a->score = a->score - (a->align_sides == 2? a->seedlen0 : 0); // the seed length have been counted twice if there was 2 alignments
                             a->qb = a->query_seed_begin - a->part[LEFT].query_end;
                             a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end+1;
                             a->rb = a->rseq_beg - a->part[LEFT].ref_end;
@@ -2148,6 +2164,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                             #ifdef DEBUG
                                 score_printerz(a);
                             #endif
+                            /*
                             // FIXME: cheat: beginning/end MIGHT be out-of-bound because of padding, so put it in-bounds instead.
                                 a->qb = (a->qb < 0 ? 0 : a->qb);
                                 a->qe = (a->qe > seq[j].l_seq ? seq[j].l_seq : a->qe);

@@ -406,7 +406,7 @@ int gase_aln(int argc, char *argv[])
 	// J.L. 2019-01-07 10:43 added args object
 	Parameters *args;
 	args = new Parameters(0, NULL);
-	args->algo = LOCAL;
+	args->algo = KSW;
 	args->start_pos = WITH_START;
 
 	double time_extend = realtime();
@@ -432,10 +432,9 @@ int gase_aln(int argc, char *argv[])
 		*/
 		
 		
-
-		int Coef = 20; // avg number of seeds per sequence
+		int Coef = 200; // avg number of seeds per sequence
 		int NbrOfSeqs = 1000;
-		int ReadLength = 157;
+		int ReadLength = 152;
 		int RefLength = 300; // the longest is 282, add some padding you get at most 289... 
 		gasal_init_streams(&(gpu_storage_vec_arr[z]), 
 				Coef * NbrOfSeqs * ReadLength , 		//host_max_query_batch_bytes
