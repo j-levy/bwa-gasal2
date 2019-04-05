@@ -67,6 +67,13 @@ short-index: all
 short: all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 4 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
 
+short2: all
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 4 /data/work/jlevy/hg19_short/chr01.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
+
+
+short3: all
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 4 /data/work/jlevy/hg19_short/chr2.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
+
 20k: all
 		./$(PROG) index fasta/target_batch.fasta
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -v 4 -l 150 fasta/target_batch.fasta fasta/query_batch.fasta > res.log

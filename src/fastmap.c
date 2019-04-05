@@ -407,7 +407,7 @@ int gase_aln(int argc, char *argv[])
 	Parameters *args;
 	args = new Parameters(0, NULL);
 	args->algo = KSW;
-	args->start_pos = WITH_START;
+	args->start_pos = WITHOUT_START;
 
 	double time_extend = realtime();
     

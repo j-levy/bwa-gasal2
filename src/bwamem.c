@@ -23,7 +23,7 @@
 #  include "malloc_wrap.h"
 #endif
 
-//#define DEBUG
+#define DEBUG
 
 /* Theory on probability and scoring *ungapped* alignment
  *
@@ -58,7 +58,7 @@
         //fprintf(stderr, "##### SCORE PRINTER #####\n");
 
         fprintf(stderr, "\t[SCOR_PRINT] align_sides=%d, where_is_long=%s\n", res->align_sides, (res->where_is_long == LEFT ? " LEFT" : "RIGHT"));
-		fprintf(stderr, "\t[SCOR_PRINT] qb, qe = (%d, %d), rb, re = (%d, %d), score, truesc = (%d, %d), \n", res->qb, res->qe, res->rb, res->re, res->score, res->truesc);
+		fprintf(stderr, "\t[SCOR_PRINT] qb, qe = (%d, %d), rb, re = (%d, %d), score, truesc = (%d, %d), %s %s \n", res->qb, res->qe, res->rb, res->re, res->score, res->truesc, (res->qb < 0? "ERROR qb<0":""), (res->qe > 150? "ERROR qe>150":""));
         fprintf(stderr, "\t[SCOR_PRINT] query_seed_begin=%d, ref_seed_begin=%d, seedlen0=%d\n", res->query_seed_begin, res->ref_seed_begin, res->seedlen0);
         part_printerz(res->part[LEFT], LEFT);
 		part_printerz(res->part[RIGHT], RIGHT);
@@ -1998,7 +1998,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     args->semiglobal_skipping_head = TARGET;
                     args->semiglobal_skipping_tail = TARGET;
 
-                    args->start_pos = WITH_START; // actually "without start" would be sufficient...
+                    args->start_pos = WITHOUT_START; // actually "without start" would be sufficient...
 
                     // launch alignment processes
                     gasal_aln_async(cur->gpu_storage, cur->n_query_batch, cur->n_target_batch, cur->n_seqs, args);
@@ -2082,15 +2082,11 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                                     // it's written badly, but it makes it readable. Could be condensed later. with a->part[a->where_is_long] 
                                     if (a->where_is_long == RIGHT)
                                     {
-                                        a->part[RIGHT].query_begin = read_start[seq_idx];
                                         a->part[RIGHT].query_end = read_end[seq_idx];
-                                        a->part[RIGHT].ref_begin = ref_start[seq_idx];
                                         a->part[RIGHT].ref_end = ref_end[seq_idx];
                                         a->part[RIGHT].score = max_score[seq_idx];
                                     } else {
-                                        a->part[LEFT].query_begin = read_start[seq_idx];
                                         a->part[LEFT].query_end = read_end[seq_idx];
-                                        a->part[LEFT].ref_begin = ref_start[seq_idx];
                                         a->part[LEFT].ref_end = ref_end[seq_idx];
                                         a->part[LEFT].score = max_score[seq_idx];
                                     }
@@ -2109,17 +2105,13 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                                     // it's written badly, but it makes it readable. Could be condensed later.
                                     if (a->where_is_long == RIGHT) // if the alignment long is RIGHT, then put the scores on LEFT. (cause we are processing SHORT sides here.)
                                     {
-                                        a->part[LEFT].query_begin = read_start[seq_idx];
                                         a->part[LEFT].query_end = read_end[seq_idx];
-                                        a->part[LEFT].ref_begin = ref_start[seq_idx];
                                         a->part[LEFT].ref_end = ref_end[seq_idx];
                                         a->part[LEFT].score = max_score[seq_idx];
                                     } 
                                     if (a->where_is_long == LEFT) 
                                     {
-                                        a->part[RIGHT].query_begin = read_start[seq_idx];
                                         a->part[RIGHT].query_end = read_end[seq_idx];
-                                        a->part[RIGHT].ref_begin = ref_start[seq_idx];
                                         a->part[RIGHT].ref_end = ref_end[seq_idx];
                                         a->part[RIGHT].score = max_score[seq_idx];
                                     }
@@ -2253,7 +2245,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
         &score, &a.n_cigar, &NM);
         */
     if (bwa_verbose >= 4)
-        fprintf(stderr, "* Final alignment: w2=%d, global_sc=%d, local_sc=%d\n", w2, score, ar->truesc);
+        fprintf(stderr, "* Final alignment: w2=%d, global_sc=%d, local_sc=%d, (qb, qe) = (%d, %d), (rb, re) = (%d, %d)\n", w2, score, ar->truesc, qb, qe, rb, re);
     //fflush(stderr);
 
     l_MD = strlen((char*) (a.cigar + a.n_cigar)) + 1;
