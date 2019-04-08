@@ -23,7 +23,7 @@
 #  include "malloc_wrap.h"
 #endif
 
-#define DEBUG
+//#define DEBUG
 
 /* Theory on probability and scoring *ungapped* alignment
  *
@@ -1149,6 +1149,18 @@ void mem_gasal_fill(gpu_batch *cur, int read_l_seq, char *read_seq, int read_l_s
 void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref_seq_length, int read_seq_length, int *curr_ref_offset, int *curr_read_offset, int seed_score)
 {
     
+    cur->gpu_storage->current_n_alns++;
+
+    if (cur->gpu_storage->current_n_alns >= cur->gpu_storage->host_max_n_alns)
+    {
+        Parameters *args;
+        args = new Parameters(0, NULL);
+        args->algo = KSW;
+        args->start_pos = WITHOUT_START; // actually "without start" would be sufficient...
+
+        gasal_host_alns_resize(cur->gpu_storage, cur->gpu_storage->host_max_n_alns*2, args);
+    }
+
     uint32_t prev_n_target_batch = cur->n_target_batch;
     uint32_t prev_n_query_batch = cur->n_query_batch;
     /*
@@ -1176,8 +1188,8 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
     mem_gasal_fill(cur, ref_seq_length, ref_seq, ref_l_seq_with_p, TARGET);
     */
     
-    // Normally this test should not be used anymore since the max_n_aln is enlarged when needed by  gasal_host_batch_fill.
-    // The thing is, you may have more alignments, but shorter ones. 
+    // I still use this test because GASAL2 does not scale with the number of alignments.
+    // it only scales with the LENGTHS for a GIVEN NUMBER of alignments.
     if (cur->n_seqs < cur->gpu_storage->host_max_n_alns) 
     {
         cur->gpu_storage->host_query_batch_lens[cur->n_seqs] = read_seq_length;
@@ -1926,10 +1938,12 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_query_batch = 0;
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_target_batch = 0;
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_seqs = 0;
+            gpu_batch_short_arr[gpu_stream_idx[SHORT]].gpu_storage->current_n_alns = 0;
 
             gpu_batch_long_arr[gpu_stream_idx[LONG]].n_query_batch = 0;
             gpu_batch_long_arr[gpu_stream_idx[LONG]].n_target_batch = 0;
             gpu_batch_long_arr[gpu_stream_idx[LONG]].n_seqs = 0;
+            gpu_batch_short_arr[gpu_stream_idx[LONG]].gpu_storage->current_n_alns = 0;
 
             int curr_read_offset[BOTH_SHORT_LONG] = {0, 0};
             int curr_ref_offset[BOTH_SHORT_LONG]  = {0, 0};
@@ -1995,8 +2009,6 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     Parameters *args;
                     args = new Parameters(0, NULL);
                     args->algo = KSW;
-                    args->semiglobal_skipping_head = TARGET;
-                    args->semiglobal_skipping_tail = TARGET;
 
                     args->start_pos = WITHOUT_START; // actually "without start" would be sufficient...
 
@@ -2156,7 +2168,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                             #ifdef DEBUG
                                 score_printerz(a);
                             #endif
-                            /*
+                            
                             // FIXME: cheat: beginning/end MIGHT be out-of-bound because of padding, so put it in-bounds instead.
                                 a->qb = (a->qb < 0 ? 0 : a->qb);
                                 a->qe = (a->qe > seq[j].l_seq ? seq[j].l_seq : a->qe);

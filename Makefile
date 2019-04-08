@@ -38,7 +38,7 @@ LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
 
-VALGRIND=valgrind
+VALGRIND=
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
 
 ifeq ($(shell uname -s),Linux)
@@ -83,7 +83,7 @@ srr150index: all
 
 
 srr150: all
-		 $(VALGRIND) ./$(PROG) gase_aln -g -t 2 -l 152 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+		 $(VALGRIND) ./$(PROG) gase_aln -g -t 3 -l 152 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
 
 #typing numbers is annoying
 srr: srr150
