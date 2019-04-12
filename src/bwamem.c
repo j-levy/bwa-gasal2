@@ -24,6 +24,7 @@
 #endif
 
 //#define DEBUG
+//#define DEBUG2
 
 /* Theory on probability and scoring *ungapped* alignment
  *
@@ -1156,9 +1157,10 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
         Parameters *args;
         args = new Parameters(0, NULL);
         args->algo = KSW;
-        args->start_pos = WITHOUT_START; // actually "without start" would be sufficient...
+        args->start_pos = WITHOUT_START;
 
-        gasal_host_alns_resize(cur->gpu_storage, cur->gpu_storage->host_max_n_alns*2, args);
+        gasal_host_alns_resize(cur->gpu_storage, (cur->gpu_storage->host_max_n_alns) * 2, args);
+        delete args;
     }
 
     uint32_t prev_n_target_batch = cur->n_target_batch;
@@ -1502,7 +1504,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             free(left_query);
         }
         free(rseq);
-        #ifdef DEBUG
+        #ifdef DEBUG2
         fprintf(stderr, "align %d\tquery:\t<%d>\t[%d]\t<%d>\trefer:\t<%d>\t[%d]\t<%d>\tsides=%d\tLong=%s\n", k, left_query_length, s->len, right_query_length, left_refer_length, s->len, right_refer_length, a->align_sides,(a->where_is_long==LEFT?"LEFT":"RIGHT"));
         #endif
 
@@ -1897,8 +1899,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         gpu_batch_long_arr[j].gpu_storage = &(gpu_storage_vec[LONG].a[j]);
         gpu_batch_long_arr[j].is_active = 0;
         gpu_batch_long_arr[j].no_extend = 1;
-        gpu_batch_short_arr[j].batch_size = 0;
-        gpu_batch_short_arr[j].batch_start = 0;
+        gpu_batch_long_arr[j].batch_size = 0;
+        gpu_batch_long_arr[j].batch_start = 0;
     }
 
     // pointers to write loops easily
@@ -1912,16 +1914,16 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     int internal_batch_no = 0;
     double time_extend;
 
-    int batch_id = 0;//this is to gather two batches with the same id for left-right extension
-
     //int total_internal_batches = 0;
     while (internal_batch_done < internal_batch_count) 
     {
         //fprintf(stderr, "internal_batch_done (%d) < internal_batch_count (%d)\n", internal_batch_done, internal_batch_count);
         int gpu_stream_idx[BOTH_SHORT_LONG] = {0, 0};
 
-        while(  gpu_stream_idx[SHORT] != gpu_storage_vec[SHORT].n && gpu_stream_idx[LONG] != gpu_storage_vec[LONG].n && 
-                gpu_batch_long_arr[gpu_stream_idx[LONG]].gpu_storage->is_free != 1 && gpu_batch_short_arr[gpu_stream_idx[SHORT]].gpu_storage->is_free != 1 )         
+        while(  gpu_stream_idx[SHORT] != gpu_storage_vec[SHORT].n && 
+                gpu_stream_idx[LONG] != gpu_storage_vec[LONG].n && 
+                gpu_batch_long_arr[gpu_stream_idx[LONG]].gpu_storage->is_free != 1 && 
+                gpu_batch_short_arr[gpu_stream_idx[SHORT]].gpu_storage->is_free != 1 )         
         {
             gpu_stream_idx[LONG]++;
             gpu_stream_idx[SHORT]++; // increment stream counter. 1 stream counter for each side. Assume both sides have the same numer of streams.
@@ -1929,10 +1931,12 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
         int internal_batch_start_idx = batch_processed;
         
-        if (internal_batch_start_idx < batch_size && gpu_stream_idx[SHORT] < gpu_storage_vec[SHORT].n && gpu_stream_idx[LONG] < gpu_storage_vec[LONG].n) 
+        if (internal_batch_start_idx < batch_size && 
+            gpu_stream_idx[SHORT] < gpu_storage_vec[SHORT].n && 
+            gpu_stream_idx[LONG] < gpu_storage_vec[LONG].n) 
 		{
             #ifdef DEBUG
-            fprintf(stderr, "gpu_stream_idx=%d, internal_batch_start_idx (%d) < batch_size (%d)\n", gpu_stream_idx[SHORT], internal_batch_start_idx, batch_size);
+            fprintf(stderr, ">[FILL] gpu_stream_idx=%d, internal_batch_start_idx (%d) < batch_size (%d)\n", gpu_stream_idx[SHORT], internal_batch_start_idx, batch_size);
             
             #endif
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_query_batch = 0;
@@ -2017,21 +2021,22 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
                     extension_time[tid].aln_kernel += (realtime() - time_extend);
                     cur->no_extend = 0;
+                    delete args;
                 } else {
                     cur->no_extend = 1;
                     mem_alnreg_v regs = regs_vec.back();// J.L. kv remove // kv_A(regs_vec, kv_size(regs_vec) - 1);
                     fprintf(stderr, "Thread no. %d is here with internal batch size %d, regs.n %d \n", tid, internal_batch_size, regs.n);
                 }
-                cur->batch_size = internal_batch_size;
+                // this size is not the number of alignment in the gpu_storage, but rather the number of sequences that produced the seeds that produced the alignments.
+                // internal_batch_size = 1000 but there may be 12039 seeds and actually 21948 alignments.
+                cur->batch_size = internal_batch_size; 
                 cur->batch_start = internal_batch_start_idx;
                 cur->is_active = 1;
                 #ifdef DEBUG
-                fprintf(stderr, "batch (%s) launched with batch_size=%d, n_seqs=%d alingments, with n_query_batch=%d, n_target_batch=%d\n", (side==SHORT?"SHORT":"LONG"), cur->batch_size, cur->n_seqs, cur->n_query_batch, cur->n_target_batch );
+                fprintf(stderr, ">[LAUNCH] batch (%s) launched with batch_size=%d, n_seqs=%d alingments, with n_query_batch=%d, n_target_batch=%d\n", (side==SHORT?"SHORT":"LONG"), cur->batch_size, cur->n_seqs, cur->n_query_batch, cur->n_target_batch );
                 #endif
 
             }
-            batch_id++; 
-
             batch_processed += internal_batch_size;
             assert(regs_vec.size() == batch_processed); // J.L. kv remove kv_size(regs_vec) ==...
             internal_batch_no++;
@@ -2067,6 +2072,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 //    fprintf(stderr, "cur->is_active==%d\n", cur->is_active);
                 if ((x == 1 || cur->no_extend == 1) && cur->is_active == 1)
                 {
+                    cur->gpu_storage->current_n_alns = 0;
                     // J.L. 2018-12-21 15:21 changed calls with best score
                     int32_t *read_start = cur->gpu_storage->host_res->query_batch_start;
                     int32_t  *ref_start = cur->gpu_storage->host_res->target_batch_start;
@@ -2074,7 +2080,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     int32_t   *read_end = cur->gpu_storage->host_res->query_batch_end;
                     int32_t    *ref_end = cur->gpu_storage->host_res->target_batch_end;
                     #ifdef DEBUG
-                    fprintf(stderr, "retrieve results on: (%s) + internal_batch_idx=%d, regs_vec.size=%d, j=(batch_start_idx=%d + internal_batch_start_idx=%d) for cur->batch_size=%d aligns\n ", (m==SHORT?"SHORT":"LONG"), internal_batch_idx,  regs_vec.size(), batch_start_idx, internal_batch_start_idx, cur->batch_size );
+                    fprintf(stderr, ">[RETRIEVE] (%s) + internal_batch_idx=%d, regs_vec.size=%d, j=(batch_start_idx=%d + internal_batch_start_idx=%d) for cur->batch_size=%d aligns\n", (m==SHORT?"SHORT":"LONG"), internal_batch_idx,  regs_vec.size(), batch_start_idx, internal_batch_start_idx, cur->batch_size );
                     #endif
                     int seq_idx=0;
                     for(j = 0, r = cur->batch_start; j < cur->batch_size; ++j, ++r)
@@ -2165,7 +2171,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                             a->rb = a->rseq_beg - a->part[LEFT].ref_end;
                             a->re = a->rseq_beg + a->seedlen0 + a->part[RIGHT].ref_end+1;
                             a->truesc = a->score;
-                            #ifdef DEBUG
+                            #ifdef DEBUG2
                                 score_printerz(a);
                             #endif
                             
@@ -2194,6 +2200,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     }
                     w_regs[j + batch_start_idx] = regs;
                 }
+                (gpu_batch_arr[SHORT] + internal_batch_idx)->is_active = 0;
+                (gpu_batch_arr[LONG] + internal_batch_idx)->is_active = 0;
                 
                 internal_batch_done++;
             }
