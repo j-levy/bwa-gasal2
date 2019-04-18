@@ -2013,7 +2013,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     Parameters *args;
                     args = new Parameters(0, NULL);
                     args->algo = KSW;
-
+                    args->isReverseComplement = false;
                     args->start_pos = WITHOUT_START; // actually "without start" would be sufficient...
 
                     // launch alignment processes
@@ -2163,7 +2163,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                         mem_alnreg_t *a = &regs.a[i];
                         //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
                         if (a->seedlen0 != seq[j].l_seq && a->align_sides > 0) //kv_A(read_seq_lens, seq_idx)
-                        { 
+                        {
                             a->score = a->part[LEFT].score + a->part[RIGHT].score;
                             a->score = a->score - (a->align_sides == 2? a->seedlen0 : 0); // the seed length have been counted twice if there was 2 alignments
                             a->qb = a->query_seed_begin - a->part[LEFT].query_end;
@@ -2299,7 +2299,6 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
         }
     }
     a.rid = bns_pos2rid(bns, pos);
-    //FIXME: why does this assert fail? it *shouldn't*.
     assert(a.rid == ar->rid);
     
     a.pos = pos - bns->anns[a.rid].offset;
