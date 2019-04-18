@@ -1848,12 +1848,44 @@ void  print_seq(int length, uint8_t* seq){
     fprintf(stderr,"\n");
 }
 
-void mem_gasal_fill(gpu_batch *gpu_batch_arr, int gpu_batch_arr_idx, int read_l_seq, char *read_seq, int read_l_seq_with_p)
+/*
+    decoy_cpu_align() replaces the alignment on GPU by using the CPU aligner, ksw_extend.
+*/
+void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_alns, const mem_opt_t *opt)
 {
-	 
-	int i;
-    gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_fill(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, read_seq, read_l_seq, QUERY);
+    for (int align_id = 0; align_id < actual_n_alns; align_id++)
+    {
+        uint32_t target_offset = gpu_storage->host_target_batch_offsets[align_id]; //starting index of the target_batch sequence
+        uint32_t query_offset = gpu_storage->host_query_batch_offsets[align_id]; //starting index of the query_batch sequence
+        uint32_t query_length = gpu_storage->host_query_batch_lens[align_id];
+        uint32_t target_length = gpu_storage->host_target_batch_lens[align_id];
+        
+        uint8_t *query = &(gpu_storage->extensible_host_unpacked_query_batch->data[query_offset]);
+        uint8_t *target = &(gpu_storage->extensible_host_unpacked_target_batch->data[target_offset]);
+        int seed_score = gpu_storage->host_seed_scores[align_id];
+        int score, query_end, target_end, global_target_end, global_score;
+        int max_off[2];
 
+
+        score = ksw_extend2(query_length, query, target_length, target, 
+                            5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, opt->w, 
+                            opt->pen_clip5, opt->zdrop, seed_score, 
+                            &query_end, &target_end, &global_target_end, &global_score, &max_off[0], 0);
+
+        // check whether we prefer to reach the end of the query
+        if (global_score <= 0 || global_score <= score - opt->pen_clip5) { // local extension
+            gpu_storage->host_res->aln_score[align_id] = score;
+            gpu_storage->host_res->query_batch_end[align_id] = query_end;
+            gpu_storage->host_res->target_batch_end[align_id] = target_end;
+        } else { // to-end extension
+            gpu_storage->host_res->aln_score[align_id] = global_score;
+            gpu_storage->host_res->query_batch_end[align_id] = query_end;
+            gpu_storage->host_res->target_batch_end[align_id] = global_target_end;
+        }
+
+    }
+    gpu_storage->is_free = 1;
+    gpu_storage->current_n_alns = 0;
 }
 
 
@@ -2017,7 +2049,9 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     args->start_pos = WITHOUT_START; // actually "without start" would be sufficient...
 
                     // launch alignment processes
-                    gasal_aln_async(cur->gpu_storage, cur->n_query_batch, cur->n_target_batch, cur->n_seqs, args);
+                    //[KSW_CPU] using CPU computation
+                    // gasal_aln_async(cur->gpu_storage, cur->n_query_batch, cur->n_target_batch, cur->n_seqs, args);
+                    decoy_cpu_align(cur->gpu_storage, cur->n_seqs, opt);
 
                     extension_time[tid].aln_kernel += (realtime() - time_extend);
                     cur->no_extend = 0;
@@ -2056,9 +2090,14 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             {
                 gpu_batch *cur = ((gpu_batch_arr[m]) + internal_batch_idx);
                 time_extend = realtime();
-                int x = 0;
+
+                //[KSW_CPU]: set x to 1 (computation done) because of computation done on CPU
+                int x = 1;
                 if (cur->gpu_storage->is_free != 1) {
-                    x = (gasal_is_aln_async_done(cur->gpu_storage) == 0);
+                    
+                    //[KSW_CPU] commented out aln_async because of computation done on CPU 
+                    // x = (gasal_is_aln_async_done(cur->gpu_storage) == 0);
+                    
                     //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d \n", tid, batch_size, internal_batch_count, internal_batch_idx);
                 }
                 if (x)
