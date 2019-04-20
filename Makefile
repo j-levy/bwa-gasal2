@@ -38,7 +38,7 @@ LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
 
-VALGRIND=
+VALGRIND=valgrind
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
 
 ifeq ($(shell uname -s),Linux)
@@ -65,31 +65,34 @@ short-index: all
 		./$(PROG) index /data/work/jlevy/hg19_short/chr1p1.fasta
 
 short: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.sam 
 
 1000: all
-		./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1000.log
+		./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
+
+10: all
+		./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/10_1.fastq /data/work/jlevy/srr/150/10_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_10.sam
 
 srr150index: all
 		./$(PROG) index /data/work/jlevy/hg19.fasta
 
 # take 1000 first reads from both files (means 4000 lines)
 srr150: all
-		 $(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 152 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+		 $(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 152 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam
 
 #typing numbers is annoying
 srr: srr150
 
 srr150gdb: all
-		echo "run gase_aln -g -t 12 -l 157 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log" |  gdb -tui ./$(PROG)
+		echo "run gase_aln -g -t 12 -l 157 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam" |  gdb -tui ./$(PROG)
 
 
 
 srr250: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 257 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > /data/work/jlevy/srr/250/res_bwa_gasal2.log
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 257 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > /data/work/jlevy/srr/250/res_bwa_gasal2.sam
 
 srr150nvprof: all
-	nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof ./$(PROG) gase_aln -t 12 -l 150 /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+	nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof ./$(PROG) gase_aln -t 12 -l 150 /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam
 
 clean-db: all
 		rm /data/work/jlevy/srr/150/*.fasta.*
