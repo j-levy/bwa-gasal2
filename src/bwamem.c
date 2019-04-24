@@ -25,6 +25,13 @@
 
 //#define DEBUG
 //#define DEBUG2
+//#define DEBUG3
+
+// FILTER_COEF defines the estimation of alignment, to decide whether to exclude next seeds computations or not.
+// A coefficient of 0.70 means "I would assume that the alignment would reach 70% of the query's length."
+// The lower the FILTER_COEF, the more seeds are taken (hence, the more alignments are performed, even potentially useless ones.)
+#define FILTER_COEF (0.50) 
+
 
 /* Theory on probability and scoring *ungapped* alignment
  *
@@ -60,7 +67,7 @@
 
         fprintf(stderr, "\t[SCOR_PRINT] align_sides=%d, where_is_long=%s\n", res->align_sides, (res->where_is_long == LEFT ? " LEFT" : "RIGHT"));
 		fprintf(stderr, "\t[SCOR_PRINT] qb, qe = (%d, %d), rb, re = (%d, %d), score, truesc = (%d, %d), %s %s \n", res->qb, res->qe, res->rb, res->re, res->score, res->truesc, (res->qb < 0? "ERROR qb<0":""), (res->qe > 150? "ERROR qe>150":""));
-        fprintf(stderr, "\t[SCOR_PRINT] query_seed_begin=%d, ref_seed_begin=%d, seedlen0=%d\n", res->query_seed_begin, res->ref_seed_begin, res->seedlen0);
+        fprintf(stderr, "\t[SCOR_PRINT] query_seed_begin=%d, target_seed_begin=%d, seedlen0=%d\n", res->query_seed_begin, res->target_seed_begin, res->seedlen0);
         part_printerz(res->part[LEFT], LEFT);
 		part_printerz(res->part[RIGHT], RIGHT);
         fprintf(stderr, "\n");
@@ -1239,7 +1246,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         if (t->len > max)
             max = t->len;
     }
-
     rmax[0] = rmax[0] > 0? rmax[0] : 0;
     rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
     if (rmax[0] < l_pac && l_pac < rmax[1]) // crossing the forward-reverse boundary; then choose one side
@@ -1249,6 +1255,27 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         else 
             rmax[0] = l_pac;
     }
+    /*
+    // fetch data around the seed
+    rmax[0] = s->rbeg - (s->qbeg + cal_max_gap(opt, s->qbeg));
+    rmax[1] = s->rbeg + s->len + ((l_query - s->qbeg - s->len) + cal_max_gap(opt, l_query - s->qbeg - s->len));
+    if (s->len > max) max = s->len;
+    rmax[0] = rmax[0] > 0? rmax[0] : 0;
+    rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
+    if (rmax[0] < l_pac && l_pac < rmax[1]) // crossing the forward-reverse boundary; then choose one side
+    { 
+        if (s->rbeg < l_pac)
+            rmax[1] = l_pac; // this works because all seeds are guaranteed to be on the same strand
+        else 
+            rmax[0] = l_pac;
+    }
+    */
+
+    // J.L. 2019-02-16 : removed padder, switched to integrated GASAL function.
+    uint8_t *rseq = NULL;
+    rseq = bns_fetch_seq(bns, pac, &rmax[0], c->seeds[0].rbeg, &rmax[1], &rid);
+    //rseq = bns_fetch_seq(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid);
+    assert(c->rid == rid);
     
    
 	srt = malloc(c->n * 8);
@@ -1312,10 +1339,11 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		a->rid = c->rid;
 
         // building estimate values for seed filtering (estimates of the beginning and end of the alnignment on ref and read)
-		int fwd = 0.85*(l_query - (s->qbeg + s->len));
+		int fwd = FILTER_COEF*((l_query - (s->qbeg + s->len)));
 		a->qe_est = ((s->qbeg + s->len) + fwd)  < l_query ? ((s->qbeg + s->len) + fwd) : l_query;
 		a->re_est = ((s->rbeg + s->len) + fwd)  < l_pac << 1 ? ((s->rbeg + s->len) + fwd) : l_pac << 1;
-		int back = 0.85*(s->qbeg + 1);
+		int back = FILTER_COEF*((s->qbeg + 1));
+        //fprintf(stderr, "fwd=%d, back=%d\n", fwd, back);
 		a->qb_est =  (s->qbeg - back) > 0 ? (s->qbeg - back) : 0;
 		a->rb_est =  (s->rbeg - back) > 0 ? (s->rbeg - back) : 0;
 		if (a->rb_est < l_pac && l_pac < a->qe_est) // crossing the forward-reverse boundary; then choose one side
@@ -1327,39 +1355,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		}
 
 
-		// fetch data around the seed
-        rmax[0] = l_pac<<1; 
-        rmax[1] = 0;
-        rmax[0] = s->rbeg - (s->qbeg + cal_max_gap(opt, s->qbeg));
-        rmax[1] = s->rbeg + s->len + ((l_query - s->qbeg - s->len) + cal_max_gap(opt, l_query - s->qbeg - s->len));
-        if (s->len > max) max = s->len;
-        rmax[0] = rmax[0] > 0? rmax[0] : 0;
-        rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
-        if (rmax[0] < l_pac && l_pac < rmax[1]) // crossing the forward-reverse boundary; then choose one side
-        { 
-            if (s->rbeg < l_pac)
-                rmax[1] = l_pac; // this works because all seeds are guaranteed to be on the same strand
-            else 
-                rmax[0] = l_pac;
-        }
-
-			int64_t rmax[2];
-			int rid;
-			rmax[0] = l_pac<<1; rmax[1] = 0;
-			rmax[0] = s->rbeg - (s->qbeg + cal_max_gap(opt, s->qbeg));
-			rmax[1] = s->rbeg + s->len + ((l_query - s->qbeg - s->len) + cal_max_gap(opt, l_query - s->qbeg - s->len));
-			rmax[0] = rmax[0] > 0? rmax[0] : 0;
-			rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
-			if (rmax[0] < l_pac && l_pac < rmax[1]) { // crossing the forward-reverse boundary; then choose one side
-				if (s->rbeg < l_pac) rmax[1] = l_pac; // this works because all seeds are guaranteed to be on the same strand
-				else rmax[0] = l_pac;
-			}
-        
-
-        // J.L. 2019-02-16 : removed padder, switched to integrated GASAL function.
-        uint8_t *rseq = NULL;
-        rseq = bns_fetch_seq(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid);
-        assert(c->rid == rid);
 
         // Alternative bns_fetch_seq that fetches things properly, even though the original is NOT GUILTY.
         // rseq = malloc(rmax[1] - rmax[0] * sizeof(uint8_t));
@@ -1406,7 +1401,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         a->score = s->len;
         a->truesc = a->score;
         a->query_seed_begin = s->qbeg;
-        a->ref_seed_begin = s->rbeg;
+        a->target_seed_begin = s->rbeg;
 
         
         // ALIGN
@@ -1503,9 +1498,12 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             free(left_refer); 
             free(left_query);
         }
-        free(rseq);
+        
         #ifdef DEBUG2
         fprintf(stderr, "align %d\tquery:\t<%d>\t[%d]\t<%d>\trefer:\t<%d>\t[%d]\t<%d>\tsides=%d\tLong=%s\n", k, left_query_length, s->len, right_query_length, left_refer_length, s->len, right_refer_length, a->align_sides,(a->where_is_long==LEFT?"LEFT":"RIGHT"));
+        #endif
+        #ifdef DEBUG3
+        fprintf(stderr, "align %d\tquery:\t<%d>\t[%d]\t<%d>\trefer:\t<%d>\t[%d]\t<%d>\ts->rbeg=%d\n", k, left_query_length, s->len, right_query_length, left_refer_length, s->len, right_refer_length, s->rbeg);
         #endif
 
         if (bwa_verbose >= 4) 
@@ -1522,9 +1520,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         int j;
         if (bwa_verbose >= 4)
             err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long) s->len, (long) s->qbeg, (long) s->rbeg, bns->anns[c->rid].name);
-        a->rseq_beg = rmax[0] /*+ rseq_beg*/;
-
-
         
 		// compute seedcov
 		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
@@ -1538,6 +1533,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		a->frac_rep = c->frac_rep;
 
 	}
+    free(rseq);
 	free(srt);
 }
 
@@ -1853,6 +1849,7 @@ void  print_seq(int length, uint8_t* seq){
 */
 void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_alns, const mem_opt_t *opt)
 {
+    
     for (int align_id = 0; align_id < actual_n_alns; align_id++)
     {
         uint32_t target_offset = gpu_storage->host_target_batch_offsets[align_id]; //starting index of the target_batch sequence
@@ -1866,6 +1863,11 @@ void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_a
         int score, query_end, target_end, global_target_end, global_score;
         int max_off[2];
 
+        #ifdef DEBUG3
+        int j;
+        fprintf(stderr, "*** target: "); for (j = 0; j < target_length; ++j) fprintf(stderr, "%c", "ACGTN"[(int)target[j]]); fprintf(stderr, "\n");
+        fprintf(stderr, "*** query : "); for (j = 0; j < query_length; ++j)  fprintf(stderr, "%c", "ACGTN"[(int)query[j]]); fprintf(stderr, "\n");
+        #endif
 
         score = ksw_extend2(query_length, query, target_length, target, 
                             5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, opt->w, 
@@ -2206,9 +2208,9 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                             a->score = a->part[LEFT].score + a->part[RIGHT].score;
                             a->score = a->score - (a->align_sides == 2? a->seedlen0 : 0); // the seed length have been counted twice if there was 2 alignments
                             a->qb = a->query_seed_begin - a->part[LEFT].query_end;
-                            a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end+1;
-                            a->rb = a->rseq_beg - a->part[LEFT].ref_end;
-                            a->re = a->rseq_beg + a->seedlen0 + a->part[RIGHT].ref_end+1;
+                            a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end;
+                            a->rb = a->target_seed_begin - a->part[LEFT].ref_end;
+                            a->re = a->target_seed_begin + a->seedlen0 + a->part[RIGHT].ref_end;
                             a->truesc = a->score;
                             #ifdef DEBUG2
                                 score_printerz(a);
