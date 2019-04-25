@@ -30,7 +30,7 @@
 // FILTER_COEF defines the estimation of alignment, to decide whether to exclude next seeds computations or not.
 // A coefficient of 0.70 means "I would assume that the alignment would reach 70% of the query's length."
 // The lower the FILTER_COEF, the more seeds are taken (hence, the more alignments are performed, even potentially useless ones.)
-#define FILTER_COEF (0.50) 
+#define FILTER_COEF (0.85) 
 
 
 /* Theory on probability and scoring *ungapped* alignment
@@ -83,9 +83,9 @@ mem_opt_t *mem_opt_init() {
 	o->b = 4;
 	o->o_del = o->o_ins = 6;
 	o->e_del = o->e_ins = 1;
-	o->w = 100;
+	o->w = 300;
 	o->T = 30;
-	o->zdrop = 100;
+	o->zdrop = 0;
 	//o->zdrop = 0;
 	o->pen_unpaired = 17;
 	o->pen_clip5 = o->pen_clip3 = 5;
@@ -1311,6 +1311,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			w = max_gap < p->w? max_gap : p->w;
 			if (qd - rd < w && rd - qd < w) break;
 		}
+        
 		if (i < regs->n) 
         {
             // the seed is (almost) contained in an existing alignment; further testing is needed to confirm it is not leading to a different aln
@@ -1331,6 +1332,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			if (bwa_verbose >= 4)
 				printf("** Seed(%d) might lead to a different alignment even though it is contained. Extension will be performed.\n", k);
 		}
+        
 
         a = kv_pushp(mem_alnreg_t, *regs);
 		memset(a, 0, sizeof(mem_alnreg_t)); // SHOULD BE STILL OK EVEN THOUGH THERES A STRUCTURE INSIDE
@@ -1347,7 +1349,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		a->qb_est =  (s->qbeg - back) > 0 ? (s->qbeg - back) : 0;
 		a->rb_est =  (s->rbeg - back) > 0 ? (s->rbeg - back) : 0;
 		if (a->rb_est < l_pac && l_pac < a->qe_est) // crossing the forward-reverse boundary; then choose one side
-        { 
+        {
 			if (s->rbeg < l_pac)
 				a->re_est = l_pac; // this works because all seeds are guaranteed to be on the same strand
 			else
@@ -1881,7 +1883,7 @@ void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_a
             gpu_storage->host_res->target_batch_end[align_id] = target_end;
         } else { // to-end extension
             gpu_storage->host_res->aln_score[align_id] = global_score;
-            gpu_storage->host_res->query_batch_end[align_id] = query_end;
+            gpu_storage->host_res->query_batch_end[align_id] = query_length; // the alignment reaches the end
             gpu_storage->host_res->target_batch_end[align_id] = global_target_end;
         }
 
@@ -2216,7 +2218,10 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                                 score_printerz(a);
                             #endif
                             
+                            
                             // FIXME: cheat: beginning/end MIGHT be out-of-bound because of padding, so put it in-bounds instead.
+                            // Probably FIXME:'D !
+                            /*
                                 a->qb = (a->qb < 0 ? 0 : a->qb);
                                 a->qe = (a->qe > seq[j].l_seq ? seq[j].l_seq : a->qe);
                             /**/
