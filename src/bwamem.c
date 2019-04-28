@@ -30,10 +30,10 @@ DEBUG3 is for detailed information about bases.
 DEBUG4 is all about memory pages for extensible data.
 */
 
-#define DEBUG
+//#define DEBUG
 //#define DEBUG2
 //#define DEBUG3
-#define DEBUG4
+//#define DEBUG4
 
 // FILTER_COEF defines the estimation of alignment, to decide whether to exclude next seeds computations or not.
 // A coefficient of 0.70 means "I would assume that the alignment would reach 70% of the query's length."
@@ -1966,6 +1966,8 @@ void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_a
             gpu_storage->host_res->query_batch_end[align_id] = query_length; // the alignment reaches the end
             gpu_storage->host_res->target_batch_end[align_id] = global_target_end;
         }
+        free(query);
+        free(target);
 
     }
     gpu_storage->is_free = 1;
