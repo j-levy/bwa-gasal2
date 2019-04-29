@@ -30,7 +30,7 @@ DEBUG3 is for detailed information about bases.
 DEBUG4 is all about memory pages for extensible data.
 */
 
-//#define DEBUG
+#define DEBUG
 //#define DEBUG2
 //#define DEBUG3
 //#define DEBUG4
@@ -2136,8 +2136,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
                     // launch alignment processes
                     //[KSW_CPU] using CPU computation
-                    // gasal_aln_async(cur->gpu_storage, cur->n_query_batch, cur->n_target_batch, cur->n_seqs, args);
-                    decoy_cpu_align(cur->gpu_storage, cur->n_seqs, opt);
+                    gasal_aln_async(cur->gpu_storage, cur->n_query_batch, cur->n_target_batch, cur->n_seqs, args);
+                    //decoy_cpu_align(cur->gpu_storage, cur->n_seqs, opt);
 
                     extension_time[tid].aln_kernel += (realtime() - time_extend);
                     cur->no_extend = 0;
@@ -2178,11 +2178,11 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 time_extend = realtime();
 
                 //[KSW_CPU]: set x to 1 (computation done) because of computation done on CPU
-                int x = 1;
+                int x = 0;
                 if (cur->gpu_storage->is_free != 1) {
                     
                     //[KSW_CPU] commented out aln_async because of computation done on CPU 
-                    // x = (gasal_is_aln_async_done(cur->gpu_storage) == 0);
+                    x = (gasal_is_aln_async_done(cur->gpu_storage) == 0);
                     
                     //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d \n", tid, batch_size, internal_batch_count, internal_batch_idx);
                 }

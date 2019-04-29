@@ -60,6 +60,8 @@ endif
 #.cu.o:
 #		 nvcc -c $(NVCCFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$(notdir $@)
 
+gasal:
+	cd ~/cp_bwa-gasal2/GASAL2/; ./run_all.sh; cd ~/cp_bwa-gasal2/;
 
 short-index: all 
 		./$(PROG) index /data/work/jlevy/hg19_short/chr1p1.fasta
@@ -67,8 +69,8 @@ short-index: all
 short: all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.sam 
 
-1000: all
-		valgrind ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
+1000: clean gasal all
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
 
 10: all
 		./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/10_1.fastq /data/work/jlevy/srr/150/10_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_10.sam
