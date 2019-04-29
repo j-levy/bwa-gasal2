@@ -23,8 +23,23 @@
 #  include "malloc_wrap.h"
 #endif
 
-//#define DEBUG
+/* Notes:
+DEBUG is for information about batches launch/retrieval.
+DEBUG2 is for information about sequences and scores.
+DEBUG3 is for detailed information about bases.
+DEBUG4 is all about memory pages for extensible data.
+*/
+
+#define DEBUG
 //#define DEBUG2
+//#define DEBUG3
+//#define DEBUG4
+
+// FILTER_COEF defines the estimation of alignment, to decide whether to exclude next seeds computations or not.
+// A coefficient of 0.70 means "I would assume that the alignment would reach 70% of the query's length."
+// The lower the FILTER_COEF, the more seeds are taken (hence, the more alignments are performed, even potentially useless ones.)
+#define FILTER_COEF (0.85)
+
 
 /* Theory on probability and scoring *ungapped* alignment
  *
@@ -60,7 +75,7 @@
 
         fprintf(stderr, "\t[SCOR_PRINT] align_sides=%d, where_is_long=%s\n", res->align_sides, (res->where_is_long == LEFT ? " LEFT" : "RIGHT"));
 		fprintf(stderr, "\t[SCOR_PRINT] qb, qe = (%d, %d), rb, re = (%d, %d), score, truesc = (%d, %d), %s %s \n", res->qb, res->qe, res->rb, res->re, res->score, res->truesc, (res->qb < 0? "ERROR qb<0":""), (res->qe > 150? "ERROR qe>150":""));
-        fprintf(stderr, "\t[SCOR_PRINT] query_seed_begin=%d, ref_seed_begin=%d, seedlen0=%d\n", res->query_seed_begin, res->ref_seed_begin, res->seedlen0);
+        fprintf(stderr, "\t[SCOR_PRINT] query_seed_begin=%d, target_seed_begin=%d, seedlen0=%d\n", res->query_seed_begin, res->target_seed_begin, res->seedlen0);
         part_printerz(res->part[LEFT], LEFT);
 		part_printerz(res->part[RIGHT], RIGHT);
         fprintf(stderr, "\n");
@@ -76,9 +91,9 @@ mem_opt_t *mem_opt_init() {
 	o->b = 4;
 	o->o_del = o->o_ins = 6;
 	o->e_del = o->e_ins = 1;
-	o->w = 100;
+	o->w = 300;
 	o->T = 30;
-	o->zdrop = 100;
+	o->zdrop = 0;
 	//o->zdrop = 0;
 	o->pen_unpaired = 17;
 	o->pen_clip5 = o->pen_clip3 = 5;
@@ -1215,7 +1230,6 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
 }
 
 
-// FIXME: check if it is alright to re-fetch the sequence every time (BWA doesn't do it, GASE does...)
 void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *regs, int *curr_read_offset, int *curr_ref_offset, gpu_batch *curr_gpu_batch_short, gpu_batch *curr_gpu_batch_long)
 {
 	int i, k, rid, max_off[2], aw[2]; // aw: actual bandwidth used in extension
@@ -1239,7 +1253,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         if (t->len > max)
             max = t->len;
     }
-
     rmax[0] = rmax[0] > 0? rmax[0] : 0;
     rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
     if (rmax[0] < l_pac && l_pac < rmax[1]) // crossing the forward-reverse boundary; then choose one side
@@ -1249,14 +1262,33 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         else 
             rmax[0] = l_pac;
     }
+    /*
+        // fetch data around the seed
+        rmax[0] = s->rbeg - (s->qbeg + cal_max_gap(opt, s->qbeg));
+        rmax[1] = s->rbeg + s->len + ((l_query - s->qbeg - s->len) + cal_max_gap(opt, l_query - s->qbeg - s->len));
+        if (s->len > max) max = s->len;
+        rmax[0] = rmax[0] > 0? rmax[0] : 0;
+        rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
+        if (rmax[0] < l_pac && l_pac < rmax[1]) // crossing the forward-reverse boundary; then choose one side
+        { 
+            if (s->rbeg < l_pac)
+                rmax[1] = l_pac; // this works because all seeds are guaranteed to be on the same strand
+            else 
+                rmax[0] = l_pac;
+        }
+    */
+
+    // J.L. 2019-02-16 : removed padder, switched to integrated GASAL function.
+    uint8_t *rseq = NULL;
+    rseq = bns_fetch_seq(bns, pac, &rmax[0], c->seeds[0].rbeg, &rmax[1], &rid);
+    //rseq = bns_fetch_seq(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid);
+    assert(c->rid == rid);
     
    
 	srt = malloc(c->n * 8);
 	for (i = 0; i < c->n; ++i)
 		srt[i] = (uint64_t)c->seeds[i].score<<32 | i;
 	ks_introsort_64(c->n, srt);
-
-    int flag = 0;
 
 	for (k = c->n - 1; k >= 0; --k) 
     {
@@ -1284,6 +1316,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			w = max_gap < p->w? max_gap : p->w;
 			if (qd - rd < w && rd - qd < w) break;
 		}
+        
 		if (i < regs->n) 
         {
             // the seed is (almost) contained in an existing alignment; further testing is needed to confirm it is not leading to a different aln
@@ -1304,7 +1337,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			if (bwa_verbose >= 4)
 				printf("** Seed(%d) might lead to a different alignment even though it is contained. Extension will be performed.\n", k);
 		}
-
+        
         a = kv_pushp(mem_alnreg_t, *regs);
 		memset(a, 0, sizeof(mem_alnreg_t)); // SHOULD BE STILL OK EVEN THOUGH THERES A STRUCTURE INSIDE
 		a->w = aw[0] = aw[1] = opt->w;
@@ -1312,14 +1345,15 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		a->rid = c->rid;
 
         // building estimate values for seed filtering (estimates of the beginning and end of the alnignment on ref and read)
-		int fwd = 0.85*(l_query - (s->qbeg + s->len));
+		int fwd = FILTER_COEF*((l_query - (s->qbeg + s->len)));
 		a->qe_est = ((s->qbeg + s->len) + fwd)  < l_query ? ((s->qbeg + s->len) + fwd) : l_query;
 		a->re_est = ((s->rbeg + s->len) + fwd)  < l_pac << 1 ? ((s->rbeg + s->len) + fwd) : l_pac << 1;
-		int back = 0.85*(s->qbeg + 1);
+		int back = FILTER_COEF*((s->qbeg + 1));
+        //fprintf(stderr, "fwd=%d, back=%d\n", fwd, back);
 		a->qb_est =  (s->qbeg - back) > 0 ? (s->qbeg - back) : 0;
 		a->rb_est =  (s->rbeg - back) > 0 ? (s->rbeg - back) : 0;
 		if (a->rb_est < l_pac && l_pac < a->qe_est) // crossing the forward-reverse boundary; then choose one side
-        { 
+        {
 			if (s->rbeg < l_pac)
 				a->re_est = l_pac; // this works because all seeds are guaranteed to be on the same strand
 			else
@@ -1327,39 +1361,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		}
 
 
-		// fetch data around the seed
-        rmax[0] = l_pac<<1; 
-        rmax[1] = 0;
-        rmax[0] = s->rbeg - (s->qbeg + cal_max_gap(opt, s->qbeg));
-        rmax[1] = s->rbeg + s->len + ((l_query - s->qbeg - s->len) + cal_max_gap(opt, l_query - s->qbeg - s->len));
-        if (s->len > max) max = s->len;
-        rmax[0] = rmax[0] > 0? rmax[0] : 0;
-        rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
-        if (rmax[0] < l_pac && l_pac < rmax[1]) // crossing the forward-reverse boundary; then choose one side
-        { 
-            if (s->rbeg < l_pac)
-                rmax[1] = l_pac; // this works because all seeds are guaranteed to be on the same strand
-            else 
-                rmax[0] = l_pac;
-        }
-
-			int64_t rmax[2];
-			int rid;
-			rmax[0] = l_pac<<1; rmax[1] = 0;
-			rmax[0] = s->rbeg - (s->qbeg + cal_max_gap(opt, s->qbeg));
-			rmax[1] = s->rbeg + s->len + ((l_query - s->qbeg - s->len) + cal_max_gap(opt, l_query - s->qbeg - s->len));
-			rmax[0] = rmax[0] > 0? rmax[0] : 0;
-			rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
-			if (rmax[0] < l_pac && l_pac < rmax[1]) { // crossing the forward-reverse boundary; then choose one side
-				if (s->rbeg < l_pac) rmax[1] = l_pac; // this works because all seeds are guaranteed to be on the same strand
-				else rmax[0] = l_pac;
-			}
-        
-
-        // J.L. 2019-02-16 : removed padder, switched to integrated GASAL function.
-        uint8_t *rseq = NULL;
-        rseq = bns_fetch_seq(bns, pac, &rmax[0], s->rbeg, &rmax[1], &rid);
-        assert(c->rid == rid);
 
         // Alternative bns_fetch_seq that fetches things properly, even though the original is NOT GUILTY.
         // rseq = malloc(rmax[1] - rmax[0] * sizeof(uint8_t));
@@ -1406,7 +1407,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         a->score = s->len;
         a->truesc = a->score;
         a->query_seed_begin = s->qbeg;
-        a->ref_seed_begin = s->rbeg;
+        a->target_seed_begin = s->rbeg;
 
         
         // ALIGN
@@ -1503,10 +1504,15 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
             free(left_refer); 
             free(left_query);
         }
-        free(rseq);
+        
         #ifdef DEBUG2
         fprintf(stderr, "align %d\tquery:\t<%d>\t[%d]\t<%d>\trefer:\t<%d>\t[%d]\t<%d>\tsides=%d\tLong=%s\n", k, left_query_length, s->len, right_query_length, left_refer_length, s->len, right_refer_length, a->align_sides,(a->where_is_long==LEFT?"LEFT":"RIGHT"));
         #endif
+        /*
+        #ifdef DEBUG3
+        fprintf(stderr, "align %d\tquery:\t<%d>\t[%d]\t<%d>\trefer:\t<%d>\t[%d]\t<%d>\ts->rbeg=%d\n", k, left_query_length, s->len, right_query_length, left_refer_length, s->len, right_refer_length, s->rbeg);
+        #endif
+        */
 
         if (bwa_verbose >= 4) 
             printf("*** Added alignment region: [%d,%d) <=> [%ld,%ld); score=%d\n", a->qb, a->qe, (long)a->rb, (long)a->re, a->score);
@@ -1522,9 +1528,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         int j;
         if (bwa_verbose >= 4)
             err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long) s->len, (long) s->qbeg, (long) s->rbeg, bns->anns[c->rid].name);
-        a->rseq_beg = rmax[0] /*+ rseq_beg*/;
-
-
         
 		// compute seedcov
 		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
@@ -1538,6 +1541,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		a->frac_rep = c->frac_rep;
 
 	}
+    free(rseq);
 	free(srt);
 }
 
@@ -1848,12 +1852,126 @@ void  print_seq(int length, uint8_t* seq){
     fprintf(stderr,"\n");
 }
 
-void mem_gasal_fill(gpu_batch *gpu_batch_arr, int gpu_batch_arr_idx, int read_l_seq, char *read_seq, int read_l_seq_with_p)
+/*
+    decoy_cpu_align() replaces the alignment on GPU by using the CPU aligner, ksw_extend.
+*/
+void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_alns, const mem_opt_t *opt)
 {
-	 
-	int i;
-    gpu_batch_arr[gpu_batch_arr_idx].n_query_batch = gasal_host_batch_fill(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, read_seq, read_l_seq, QUERY);
+            int32_t prev_page = -1;
 
+    for (int align_id = 0; align_id < actual_n_alns; align_id++)
+    {
+        uint32_t target_offset = gpu_storage->host_target_batch_offsets[align_id]; //starting index of the target_batch sequence
+        uint32_t query_offset = gpu_storage->host_query_batch_offsets[align_id]; //starting index of the query_batch sequence
+        uint32_t query_length = gpu_storage->host_query_batch_lens[align_id];
+        uint32_t target_length = gpu_storage->host_target_batch_lens[align_id];
+        
+        uint8_t *query = NULL;
+        uint8_t *target = NULL;
+        int nbr_N;
+
+        host_batch_t *cur_page = NULL;
+
+
+        // ########################################################################################
+
+        nbr_N = 0;
+        while((query_length+nbr_N)%8)
+		    nbr_N++;
+        
+        query = (uint8_t*) malloc((query_length + nbr_N) * sizeof(uint8_t));
+        // find page to start reading
+        cur_page = gpu_storage->extensible_host_unpacked_query_batch;
+        while (cur_page->next != NULL && query_offset >= cur_page->next->offset)
+        {
+            cur_page = cur_page->next;
+        }
+        
+        // I know my starting page. Check if my sequence is contained in the page:
+        if (cur_page->next != NULL && (cur_page->next->offset < query_offset + query_length + nbr_N))
+        {
+            // mend the data. We assume a sequence is only broken over TWO pages. Current, and next.
+            memcpy(query, &(cur_page->data[query_offset - cur_page->offset]), cur_page->next->offset - query_offset);
+            memcpy(query + cur_page->next->offset - query_offset, &(cur_page->next->data[0]), query_offset + query_length + nbr_N - cur_page->next->offset);
+        } else {
+            memcpy(query, &(cur_page->data[query_offset - cur_page->offset]), query_length + nbr_N);
+        }
+
+        #ifdef DEBUG4
+        if (cur_page->offset != prev_page)
+        {
+            //prev_page = cur_page->offset;
+            //fprintf(stderr, "query\tpage_offset=%d\tquery_offset=%d\tquery_length+nbr_N=%d\tnext->offset=%d\n", cur_page->offset, query_offset,  query_length + nbr_N, cur_page->next == NULL? -1 : cur_page->next->offset);
+        }
+        #endif
+        // ########################################################################################
+        
+        nbr_N = 0;
+        while((target_length+nbr_N)%8)
+		    nbr_N++;
+        
+        target = (uint8_t*) malloc((target_length + nbr_N) * sizeof(uint8_t));
+        // find page to start reading
+        cur_page = gpu_storage->extensible_host_unpacked_target_batch;
+        while (cur_page->next != NULL && target_offset >= cur_page->next->offset)
+        {
+            cur_page = cur_page->next;
+        }
+        
+        // I know my starting page. Check if my sequence is contained in the page:
+        if (cur_page->next != NULL && (cur_page->next->offset < target_offset + target_length + nbr_N))
+        {
+            // mend the data. We assume a sequence is only broken over TWO pages. Current, and next.
+            memcpy(target, &(cur_page->data[target_offset - cur_page->offset]), cur_page->next->offset - target_offset);
+            memcpy(target + cur_page->next->offset - target_offset, &(cur_page->next->data[0]), target_offset + target_length + nbr_N - cur_page->next->offset);
+        } else {
+            memcpy(target, &(cur_page->data[target_offset - cur_page->offset]), target_length + nbr_N);
+        }
+
+        #ifdef DEBUG4
+        if (cur_page->offset != prev_page || target_length > 1000)
+        {
+            prev_page = cur_page->offset;
+            if (target_length > 1000) fprintf(stderr, "ERROR ERROR ERROR: ");
+            fprintf(stderr, "target\tpage_offset=%d\ttarget_offset=%d\ttarget_length=%d\tnext->offset=%d\n", cur_page->offset, target_offset,  target_length, cur_page->next == NULL? -1 : cur_page->next->offset); // FIXME: a weird target offset is derived under certain circumstances
+        } else {
+
+        }
+        #endif
+
+        // #######################################################################################
+
+        int seed_score = gpu_storage->host_seed_scores[align_id];
+        int score, query_end, target_end, global_target_end, global_score;
+        int max_off[2];
+
+        #ifdef DEBUG3
+        int j;
+        fprintf(stderr, "*** target: "); for (j = 0; j < target_length; ++j) fprintf(stderr, "%c", "ACGTN"[(int)target[j]]); fprintf(stderr, "\n");
+        fprintf(stderr, "*** query : "); for (j = 0; j < query_length; ++j)  fprintf(stderr, "%c", "ACGTN"[(int)query[j]]); fprintf(stderr, "\n");
+        #endif
+
+        score = ksw_extend2(query_length, query, target_length, target, 
+                            5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, opt->w, 
+                            opt->pen_clip5, opt->zdrop, seed_score, 
+                            &query_end, &target_end, &global_target_end, &global_score, &max_off[0], 0);
+
+        // check whether we prefer to reach the end of the query
+        if (global_score <= 0 || global_score <= score - opt->pen_clip5) { // local extension
+            gpu_storage->host_res->aln_score[align_id] = score;
+            gpu_storage->host_res->query_batch_end[align_id] = query_end;
+            gpu_storage->host_res->target_batch_end[align_id] = target_end;
+        } else { // to-end extension
+            gpu_storage->host_res->aln_score[align_id] = global_score;
+            gpu_storage->host_res->query_batch_end[align_id] = query_length; // the alignment reaches the end
+            gpu_storage->host_res->target_batch_end[align_id] = global_target_end;
+        }
+        free(query);
+        free(target);
+
+    }
+    gpu_storage->is_free = 1;
+    gpu_storage->current_n_alns = 0;
 }
 
 
@@ -2017,7 +2135,9 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     args->start_pos = WITHOUT_START; // actually "without start" would be sufficient...
 
                     // launch alignment processes
+                    //[KSW_CPU] using CPU computation
                     gasal_aln_async(cur->gpu_storage, cur->n_query_batch, cur->n_target_batch, cur->n_seqs, args);
+                    //decoy_cpu_align(cur->gpu_storage, cur->n_seqs, opt);
 
                     extension_time[tid].aln_kernel += (realtime() - time_extend);
                     cur->no_extend = 0;
@@ -2056,9 +2176,14 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             {
                 gpu_batch *cur = ((gpu_batch_arr[m]) + internal_batch_idx);
                 time_extend = realtime();
+
+                //[KSW_CPU]: set x to 1 (computation done) because of computation done on CPU
                 int x = 0;
                 if (cur->gpu_storage->is_free != 1) {
+                    
+                    //[KSW_CPU] commented out aln_async because of computation done on CPU 
                     x = (gasal_is_aln_async_done(cur->gpu_storage) == 0);
+                    
                     //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d \n", tid, batch_size, internal_batch_count, internal_batch_idx);
                 }
                 if (x)
@@ -2167,15 +2292,18 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                             a->score = a->part[LEFT].score + a->part[RIGHT].score;
                             a->score = a->score - (a->align_sides == 2? a->seedlen0 : 0); // the seed length have been counted twice if there was 2 alignments
                             a->qb = a->query_seed_begin - a->part[LEFT].query_end;
-                            a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end+1;
-                            a->rb = a->rseq_beg - a->part[LEFT].ref_end;
-                            a->re = a->rseq_beg + a->seedlen0 + a->part[RIGHT].ref_end+1;
+                            a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end;
+                            a->rb = a->target_seed_begin - a->part[LEFT].ref_end;
+                            a->re = a->target_seed_begin + a->seedlen0 + a->part[RIGHT].ref_end;
                             a->truesc = a->score;
                             #ifdef DEBUG2
                                 score_printerz(a);
                             #endif
                             
+                            
                             // FIXME: cheat: beginning/end MIGHT be out-of-bound because of padding, so put it in-bounds instead.
+                            // Probably FIXME:'D !
+                            /*
                                 a->qb = (a->qb < 0 ? 0 : a->qb);
                                 a->qe = (a->qe > seq[j].l_seq ? seq[j].l_seq : a->qe);
                             /**/
