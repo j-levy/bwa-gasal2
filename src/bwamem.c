@@ -1897,7 +1897,7 @@ void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_a
             memcpy(query, &(cur_page->data[query_offset - cur_page->offset]), query_length + nbr_N);
         }
 
-        #ifdef DEBUG4
+        #ifdef wDEBUG4
         if (cur_page->offset != prev_page)
         {
             //prev_page = cur_page->offset;
@@ -1987,6 +1987,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     kv_init(regs_vec);
     kv_resize(mem_alnreg_v, regs_vec, batch_size);
     */
+   fprintf(stderr, "entering align1_core with batch_start_idx=%d, batch_size=%d\n", batch_start_idx, batch_size);
     int GPU_READ_BATCH_SIZE;
     if (batch_size >= 4000) 
         GPU_READ_BATCH_SIZE = 1000;
@@ -2049,13 +2050,14 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
         int internal_batch_start_idx = batch_processed;
         
+        // stream selected.
+
         if (internal_batch_start_idx < batch_size && 
             gpu_stream_idx[SHORT] < gpu_storage_vec[SHORT].n && 
             gpu_stream_idx[LONG] < gpu_storage_vec[LONG].n) 
 		{
             #ifdef DEBUG
-            fprintf(stderr, ">[FILL] gpu_stream_idx=%d, internal_batch_start_idx (%d) < batch_size (%d)\n", gpu_stream_idx[SHORT], internal_batch_start_idx, batch_size);
-            
+            fprintf(stderr, ">[FILL] gpu_stream_idx=%d, internal_batch_start_idx (%d) < batch_size (%d)\n", gpu_stream_idx[SHORT], internal_batch_start_idx, batch_size);    
             #endif
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_query_batch = 0;
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_target_batch = 0;
@@ -2163,15 +2165,15 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         }//end if
         //fprintf(stderr, "internal batch %d launched\n", internal_batch_no++);
         
-        
-        
         // ===NOTE: GASAL2 GET RESULT, measure time
         //fprintf(stderr, "Current extension time of %d seeds on GPU by thread no. %d is %.3f usec\n", kv_size(ref_seq_lens), tid,  extension_time[tid]*1e6);
         int m;
-        int internal_batch_idx = 0;
-        
-        while (internal_batch_idx != gpu_storage_vec[SHORT].n) //loop over all streams to retrieve results of finished streams
+        int internal_batch_idx = gpu_stream_idx[SHORT];
+        int prev_internal_batch_done = internal_batch_done;
+        //while (internal_batch_idx != gpu_storage_vec[SHORT].n) //loop over all streams to retrieve results of finished streams
+        while(prev_internal_batch_done == internal_batch_done)// blocking function for score retrieval
         {
+			//fprintf(stderr, "internal_batch_idx != gpu_storage_vec[SHORT].n (%d != %d)\n", internal_batch_idx, gpu_storage_vec[SHORT].n);
             for (m = 0; m < BOTH_SHORT_LONG; m++) // proceed both arrays, SHORT and LONG
             {
                 gpu_batch *cur = ((gpu_batch_arr[m]) + internal_batch_idx);
@@ -2333,7 +2335,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 
                 internal_batch_done++;
             }
-            internal_batch_idx++; // if BOTH SHORT LONG are done on this stream, go to next stream.
+            //internal_batch_idx++; // if BOTH SHORT LONG are done on this stream, go to next stream.
         }
         // results gathered
         
