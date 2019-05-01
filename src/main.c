@@ -8,6 +8,8 @@
 #define PACKAGE_VERSION "0.1"
 #endif
 
+//#define DEBUG_TIMELOG
+
 int bwa_fa2pac(int argc, char *argv[]);
 int bwa_pac2bwt(int argc, char *argv[]);
 int bwa_bwtupdate(int argc, char *argv[]);
@@ -123,6 +125,7 @@ int main(int argc, char *argv[])
 		double total_time = realtime() - t_real;
 		double total_extension_time = 0.0;
 		int n_threads = 0;
+		#ifdef DEBUG_TIMELOG
 		for (i = 0; i < 30; ++i) {
 			//fprintf(stderr, "Total time spent in host_mem_alloc by thread %d = %.3f seconds\n", i, extension_time[i].host_mem_alloc);
 			//fprintf(stderr, "Percentage of total time spent in extension by thread %d = %.3f\n", i, (extension_time[i]/total_time)*100);
@@ -143,7 +146,7 @@ int main(int argc, char *argv[])
 		fprintf(f_exec_time,"Average extension percentage = %.3f\t", ((total_extension_time/n_threads)/total_time)*100);
 		fprintf(stderr,"Total no. of extensions = %llu\n", total_extensions);
 		fprintf(f_exec_time, "Percentage time wasted due to imperfect load balancing = %.3f\n", (total_load_balance_waste_time/total_time)*100);
-
+		#endif
 
 	}
 	free(bwa_pg);

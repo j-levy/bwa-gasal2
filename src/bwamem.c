@@ -24,14 +24,14 @@
 #endif
 
 /* Notes:
-DEBUG is for information about batches launch/retrieval.
+DEBUG  is for information about batches launch/retrieval.
 DEBUG2 is for information about sequences and scores.
 DEBUG3 is for detailed information about bases.
 DEBUG4 is all about memory pages for extensible data.
 */
 
 #define DEBUG
-//#define DEBUG2
+#define DEBUG2
 //#define DEBUG3
 //#define DEBUG4
 
@@ -1508,11 +1508,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
         #ifdef DEBUG2
         fprintf(stderr, "align %d\tquery:\t<%d>\t[%d]\t<%d>\trefer:\t<%d>\t[%d]\t<%d>\tsides=%d\tLong=%s\n", k, left_query_length, s->len, right_query_length, left_refer_length, s->len, right_refer_length, a->align_sides,(a->where_is_long==LEFT?"LEFT":"RIGHT"));
         #endif
-        /*
-        #ifdef DEBUG3
-        fprintf(stderr, "align %d\tquery:\t<%d>\t[%d]\t<%d>\trefer:\t<%d>\t[%d]\t<%d>\ts->rbeg=%d\n", k, left_query_length, s->len, right_query_length, left_refer_length, s->len, right_refer_length, s->rbeg);
-        #endif
-        */
+
 
         if (bwa_verbose >= 4) 
             printf("*** Added alignment region: [%d,%d) <=> [%ld,%ld); score=%d\n", a->qb, a->qe, (long)a->rb, (long)a->re, a->score);

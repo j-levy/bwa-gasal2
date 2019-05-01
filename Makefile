@@ -72,8 +72,8 @@ short: all
 1000: clean gasal all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
 
-10: all
-		./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/10_1.fastq /data/work/jlevy/srr/150/10_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_10.sam
+1: clean gasal all
+		./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/cp_bwa-gasal2_1.sam
 
 srr150index: all
 		./$(PROG) index /data/work/jlevy/hg19.fasta
@@ -127,7 +127,7 @@ libshd_filter.a: $(SHD_OBJS)
 
 clean:
 		rm -f -r gmon.out $(OBJ_DIR) a.out $(PROG) *~ $(LIB_DIR)
-		rm *.log
+		#rm *.log
 		#make -C ./src/shd_filter/ clean
 
 #depend:
