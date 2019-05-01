@@ -31,7 +31,7 @@ DEBUG4 is all about memory pages for extensible data.
 */
 
 //#define DEBUG
-//#define DEBUG2
+#define DEBUG2
 //#define DEBUG3
 //#define DEBUG4
 
