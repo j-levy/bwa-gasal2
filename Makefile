@@ -38,7 +38,7 @@ LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
 
-VALGRIND=cuda-memcheck valgrind
+VALGRIND=
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
 
 ifeq ($(shell uname -s),Linux)
@@ -69,11 +69,14 @@ short-index: all
 short: all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.sam 
 
-1000: clean gasal all
+1000: all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
+		sha256sum /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
 
-1: clean gasal all
-		./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1.sam
+1000all: clean gasal 1000 
+
+1: all
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1.sam
 
 srr150index: all
 		./$(PROG) index /data/work/jlevy/hg19.fasta

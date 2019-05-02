@@ -31,7 +31,7 @@ DEBUG4 is all about memory pages for extensible data.
 */
 
 #define DEBUG
-#define DEBUG2
+//#define DEBUG2
 //#define DEBUG3
 //#define DEBUG4
 
@@ -1983,7 +1983,6 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     kv_init(regs_vec);
     kv_resize(mem_alnreg_v, regs_vec, batch_size);
     */
-   fprintf(stderr, "entering align1_core with batch_start_idx=%d, batch_size=%d\n", batch_start_idx, batch_size);
     int GPU_READ_BATCH_SIZE;
     if (batch_size >= 4000) 
         GPU_READ_BATCH_SIZE = 1000;
@@ -2178,7 +2177,6 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 //[KSW_CPU]: set x to 1 (computation done) because of computation done on CPU
                 int x = 0;
                 if (cur->gpu_storage->is_free != 1) {
-                    
                     //[KSW_CPU] commented out aln_async because of computation done on CPU 
                     x = (gasal_is_aln_async_done(cur->gpu_storage) == 0);
                     
@@ -2298,13 +2296,6 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                                 score_printerz(a);
                             #endif
                             
-                            
-                            // FIXME: cheat: beginning/end MIGHT be out-of-bound because of padding, so put it in-bounds instead.
-                            // Probably FIXME:'D !
-                            /*
-                                a->qb = (a->qb < 0 ? 0 : a->qb);
-                                a->qe = (a->qe > seq[j].l_seq ? seq[j].l_seq : a->qe);
-                            /**/
                             seq_idx++;
                         }
                         //free(a);
