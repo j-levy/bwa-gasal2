@@ -38,7 +38,7 @@ LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
 
-VALGRIND=valgrind
+VALGRIND=cuda-memcheck valgrind
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
 
 ifeq ($(shell uname -s),Linux)
@@ -61,7 +61,7 @@ endif
 #		 nvcc -c $(NVCCFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$(notdir $@)
 
 gasal:
-	cd ~/cp_bwa-gasal2/GASAL2/; ./run_all.sh; cd ~/cp_bwa-gasal2/;
+	cd ~/bwa-gasal2/GASAL2/; ./run_all.sh; cd ~/bwa-gasal2/;
 
 short-index: all 
 		./$(PROG) index /data/work/jlevy/hg19_short/chr1p1.fasta
@@ -73,7 +73,7 @@ short: all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
 
 1: clean gasal all
-		./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/cp_bwa-gasal2_1.sam
+		./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1.sam
 
 srr150index: all
 		./$(PROG) index /data/work/jlevy/hg19.fasta
