@@ -8,7 +8,7 @@
 #define PACKAGE_VERSION "0.1"
 #endif
 
-//#define DEBUG_TIMELOG
+#define DEBUG_TIMELOG
 
 int bwa_fa2pac(int argc, char *argv[]);
 int bwa_pac2bwt(int argc, char *argv[]);
@@ -126,7 +126,8 @@ int main(int argc, char *argv[])
 		double total_extension_time = 0.0;
 		int n_threads = 0;
 		#ifdef DEBUG_TIMELOG
-		for (i = 0; i < 30; ++i) {
+		for (i = 0; i < 12; ++i) // display for max. 12 threads.
+		{
 			//fprintf(stderr, "Total time spent in host_mem_alloc by thread %d = %.3f seconds\n", i, extension_time[i].host_mem_alloc);
 			//fprintf(stderr, "Percentage of total time spent in extension by thread %d = %.3f\n", i, (extension_time[i]/total_time)*100);
 			//fprintf(stderr, "Percentage of total time spent in extension by thread %d = %.3f\n", i, (extension_time[i]/total_time)*100);

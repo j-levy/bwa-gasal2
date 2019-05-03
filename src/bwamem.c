@@ -30,7 +30,7 @@ DEBUG3 is for detailed information about bases.
 DEBUG4 is all about memory pages for extensible data.
 */
 
-#define DEBUG
+//#define DEBUG
 //#define DEBUG2
 //#define DEBUG3
 //#define DEBUG4
@@ -2113,8 +2113,9 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 
             // ===NOTE: now, GASAL2 KERNEL LAUCNH ON BATCH
             // tried my best to make it readable. I know manipulating addresses can be confusing. Please don't be mad
+            // launching the LONG batch first saves 1%, and it's free.
             int side;
-            for(side=0; side < BOTH_SHORT_LONG; ++side)
+            for(side=BOTH_SHORT_LONG-1; side >= 0; --side)
             {
                 gpu_batch *cur = ((gpu_batch_arr[side]) + gpu_stream_idx[side]);
                 if ( cur->n_seqs > 0) 

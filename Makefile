@@ -40,6 +40,7 @@ SUBDIRS=.
 
 VALGRIND=
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
+NVPROF=nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof
 
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt
@@ -74,6 +75,12 @@ short: all
 		sha256sum /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
 
 1000all: clean gasal 1000 
+
+10k: all
+		$(NVPROF) $(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/10000_1.fastq /data/work/jlevy/srr/150/10000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_10000.sam
+		sha256sum /data/work/jlevy/srr/150/res_bwa-gasal2_10000.sam
+
+10kall: clean gasal 10k
 
 1: all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1.sam
