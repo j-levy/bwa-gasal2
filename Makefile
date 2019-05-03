@@ -68,22 +68,22 @@ short-index: all
 		./$(PROG) index /data/work/jlevy/hg19_short/chr1p1.fasta
 
 short: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.sam 
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.sam 
 
 1000: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
 		sha256sum /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
 
 1000all: clean gasal 1000 
 
 10k: all
-		$(NVPROF) $(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/10000_1.fastq /data/work/jlevy/srr/150/10000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_10000.sam
+		$(NVPROF) $(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/10000_1.fastq /data/work/jlevy/srr/150/10000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_10000.sam
 		sha256sum /data/work/jlevy/srr/150/res_bwa-gasal2_10000.sam
 
 10kall: clean gasal 10k
 
 1: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1.sam
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1.sam
 
 srr150index: all
 		./$(PROG) index /data/work/jlevy/hg19.fasta
