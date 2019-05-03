@@ -60,9 +60,10 @@ endif
 	
 #.cu.o:
 #		 nvcc -c $(NVCCFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$(notdir $@)
+clean_light:
+	rm $(LIB_DIR)libbwa.a $(OBJ_DIR)fastmap.o $(OBJ_DIR)bwamem.o $(GASAL_LIB_DIR)libgasal.a
 
-gasal:
-	cd ~/bwa-gasal2/GASAL2/; ./run_all.sh; cd ~/bwa-gasal2/;
+
 
 short-index: all 
 		./$(PROG) index /data/work/jlevy/hg19_short/chr1p1.fasta
@@ -108,7 +109,7 @@ srr150nvprof: all
 
 clean-db: all
 		rm /data/work/jlevy/srr/150/*.fasta.*
-		rm /data/work/jlevy/srr/150/*.fastq.*
+		#rm /data/work/jlevy/srr/150/*.fastq.*
 
 
 all: makedir $(PROG) 
@@ -118,7 +119,7 @@ makedir:
 	@mkdir -p $(LIB_DIR)
 	@echo "If you donot see anything below this line then there is nothing to \"make\""
 
-bwa-gasal2:libbwa.a libshd_filter.a  $(AOBJS) main.o
+bwa-gasal2:libbwa.a libshd_filter.a $(GASAL_LIB_DIR)libgasal.a $(AOBJS) main.o
 		$(CXX) $(CFLAGS) $(DFLAGS) $(AOBJS_PATH) $(OBJ_DIR)main.o -o $@ -L$(LIB_DIR) -L$(CUDA_LIB_DIR)  -L$(GASAL_LIB_DIR) -lbwa -lshd_filter -lgasal $(LIBS)
 
 
@@ -134,6 +135,11 @@ libshd_filter.a: $(SHD_OBJS)
 #libgasal.a: $(GASAL_OBJS)
 		#make -C ./src/shd_filter libshd_filter.a
 		#ar -csru $(LIB_DIR)$@ $(GASAL_OBJS_PATH) 		
+$(GASAL_LIB_DIR)libgasal.a:
+	cd GASAL2/; ./run_all.sh; cd ..;
+
+gasal:
+	cd GASAL2/; ./run_all.sh; cd ..;
 
 clean:
 		rm -f -r gmon.out $(OBJ_DIR) a.out $(PROG) *~ $(LIB_DIR)
