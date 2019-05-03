@@ -1853,7 +1853,7 @@ void  print_seq(int length, uint8_t* seq){
 */
 void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_alns, const mem_opt_t *opt)
 {
-            int32_t prev_page = -1;
+    int32_t prev_page = -1;
 
     for (int align_id = 0; align_id < actual_n_alns; align_id++)
     {
@@ -1977,7 +1977,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     //extern double *extension_time;
     extern time_struct *extension_time;
     extern uint64_t *no_of_extensions;
-
+    gasal_set_device(GPU_SELECT, false);
     /* J.L. 2019-03-18 kv remove
     kvec_t(mem_alnreg_v) regs_vec;
     kv_init(regs_vec);

@@ -28,6 +28,7 @@ typedef struct __smem_i smem_i;
 #define RIGHT (1)
 #define BOTH_LEFT_RIGHT (2)
 
+#define GPU_SELECT (1)		// change here for the server, 0 for Quadro K40c, 1 for GTX 750 Ti
 
 typedef struct {
 	int a, b;               // match score and mismatch penalty
