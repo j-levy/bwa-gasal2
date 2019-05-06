@@ -125,8 +125,11 @@ int main(int argc, char *argv[])
 		double total_time = realtime() - t_real;
 		double total_extension_time = 0.0;
 		int n_threads = 0;
+		fprintf(stderr, "n_threads = %d\n", n_threads);
 		#ifdef DEBUG_TIMELOG
-		for (i = 0; i < 12; ++i) // display for max. 12 threads.
+		while (no_of_extensions[n_threads] > 0)
+			n_threads++;
+		for (i = 0; i < n_threads; i++) // display for max. 12 threads.
 		{
 			//fprintf(stderr, "Total time spent in host_mem_alloc by thread %d = %.3f seconds\n", i, extension_time[i].host_mem_alloc);
 			//fprintf(stderr, "Percentage of total time spent in extension by thread %d = %.3f\n", i, (extension_time[i]/total_time)*100);
@@ -135,7 +138,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Total time spent in get_results_actual by thread %d = %.3f seconds\n", i, extension_time[i].get_results_actual);
 			fprintf(stderr, "Total time spent in get_results_wasted by thread %d = %.3f seconds\n", i, extension_time[i].get_results_wasted);
 			total_extensions += no_of_extensions[i];
-			if (no_of_extensions[i] > 0) n_threads++;
+			
 			fprintf(stderr, "Total time spent in extension in gpu by thread %d (excluding mem_alloc and mem_free)= %.3f seconds\n", i, extension_time[i].aln_kernel + extension_time[i].get_results_actual + extension_time[i].get_results_wasted);
 			total_extension_time += (extension_time[i].aln_kernel + extension_time[i].get_results_actual + extension_time[i].get_results_wasted);
 		}
