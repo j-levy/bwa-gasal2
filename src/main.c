@@ -125,10 +125,10 @@ int main(int argc, char *argv[])
 		double total_time = realtime() - t_real;
 		double total_extension_time = 0.0;
 		int n_threads = 0;
-		fprintf(stderr, "n_threads = %d\n", n_threads);
 		#ifdef DEBUG_TIMELOG
 		while (no_of_extensions[n_threads] > 0)
 			n_threads++;
+		fprintf(stderr, "n_threads = %d\n", n_threads);
 		for (i = 0; i < n_threads; i++) // display for max. 12 threads.
 		{
 			//fprintf(stderr, "Total time spent in host_mem_alloc by thread %d = %.3f seconds\n", i, extension_time[i].host_mem_alloc);

@@ -452,6 +452,7 @@ int gase_aln(int argc, char *argv[])
 	extension_time[0].gpu_mem_alloc += (realtime() - time_extend);
 
 	//fprintf(stderr, "Time required to allocate gpu memory and host memory for %d threads = %.3f seconds\n", opt->n_threads, extension_time[0].gpu_mem_alloc);
+	#ifdef TIME_LOG_TO_FILE
 	f_exec_time = fopen(run_exec_time, "a");
 	//The columns in the tab seperated run_exec_time are:
 	// 1- read length
@@ -462,6 +463,8 @@ int gase_aln(int argc, char *argv[])
 	//	6- execution time in seconds
 	//There is no new line at the end so more values may be printed on the same line, if desired.
 	fprintf(f_exec_time,"%d\t%d\t%d\t%d\t%d\t%d\t",opt->n_threads, opt->read_len, opt->seed_type, opt->min_seed_len, opt->seed_intv, opt->dp_type);
+	#endif
+
 	bwa_print_sam_hdr(aux.idx->bns, hdr_line);
 	aux.actual_chunk_size = fixed_chunk_size > 0? fixed_chunk_size : opt->chunk_size * opt->n_threads;
 	kt_pipeline(no_mt_io? 1 : 2, process, &aux, 3);

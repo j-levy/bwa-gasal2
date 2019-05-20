@@ -37,10 +37,11 @@ INCLUDES= -I$(GASAL_INCLUDE_DIR)
 LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
-ANALYSIS_FILENAME=srr150_gtx
+ANALYSIS_FILENAME=srr150_k40c
 VALGRIND=
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
-NVPROF=nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof
+NVPROF=
+#nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof
 
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt

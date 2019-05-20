@@ -118,4 +118,7 @@ typedef struct{
 	double get_results_actual;
 }time_struct;
 
+// toggle this to disable log to file
+//#define TIME_LOG_TO_FILE
+
 #endif
