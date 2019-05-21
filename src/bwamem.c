@@ -1974,10 +1974,17 @@ void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_a
 //#define GPU_READ_BATCH_SIZE 1000
 void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *seq, void *buf, int batch_size, int batch_start_idx, mem_alnreg_v *w_regs, int tid, gasal_gpu_storage_v *gpu_storage_vec) {
     int j,  r;
-    //extern double *extension_time;
     extern time_struct *extension_time;
     extern uint64_t *no_of_extensions;
-    gasal_set_device(GPU_SELECT, false);
+
+	double full_mem_aln1_core;
+	double full_mem_chain2aln;
+	double chain_preprocess;
+	full_mem_aln1_core = realtime();
+
+    // J.L. 2019-05-20  Disabled selection (there's no choice anymore)
+    // gasal_set_device(GPU_SELECT, false);
+
     /* J.L. 2019-03-18 kv remove
     kvec_t(mem_alnreg_v) regs_vec;
     kv_init(regs_vec);
@@ -2084,6 +2091,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 					read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]];
 				
                 // ===NOTE: computing chains, store them in the mem_chain_v chn
+                chain_preprocess = realtime();
+
                 chn = mem_chain(opt, bwt, bns, seq[j].l_seq, (uint8_t*)(read_seq), buf);
                 chn.n = mem_chain_flt(opt, chn.n, chn.a);
 
@@ -2092,6 +2101,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 else mem_flt_chained_seeds(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), chn.n, chn.a);
                 if (bwa_verbose >= 4)
                     mem_print_chain(bns, &chn);
+                extension_time[tid].chain_preprocess += (realtime() - chain_preprocess);
+
 
                 // ===NOTE: CHAINS DONE. Fetching sequence for seeds
                 kv_init(regs);
@@ -2099,8 +2110,10 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 {
                     mem_chain_t *p = &chn.a[i];
                     if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
+                    full_mem_chain2aln = realtime();
                     mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, 
                                     curr_read_offset, curr_ref_offset, &gpu_batch_short_arr[gpu_stream_idx[SHORT]], &gpu_batch_long_arr[gpu_stream_idx[LONG]]);
+                    extension_time[tid].full_mem_chain2aln += (realtime() - full_mem_chain2aln);
                     free(chn.a[i].seeds);
                 }// end for
                 free(chn.a);
@@ -2330,6 +2343,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     }
     //kv_destroy(regs_vec); //J.L. kv remove
     //fprintf(stderr, "--------------------------------------");
+    extension_time[tid].full_mem_aln1_core += (realtime() - full_mem_aln1_core);
 }
 
 mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar) {

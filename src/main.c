@@ -135,6 +135,12 @@ int main(int argc, char *argv[])
 			//fprintf(stderr, "Percentage of total time spent in extension by thread %d = %.3f\n", i, (extension_time[i]/total_time)*100);
 			//fprintf(stderr, "Percentage of total time spent in extension by thread %d = %.3f\n", i, (extension_time[i]/total_time)*100);
 			fprintf(stderr, "Total time spent in gpu_aln_kernel by thread %d = %.3f seconds\n", i, extension_time[i].aln_kernel);
+
+			fprintf(stderr, "Total time spent in chain_preprocess by thread %d = %.3f seconds\n", i, extension_time[i].chain_preprocess);
+			fprintf(stderr, "Total time spent in mem_aln1_core by thread %d = %.3f seconds\n", i, extension_time[i].full_mem_aln1_core);
+			fprintf(stderr, "Total time spent in mem_chain2aln by thread %d = %.3f seconds\n", i, extension_time[i].full_mem_chain2aln);
+			
+
 			fprintf(stderr, "Total time spent in get_results_actual by thread %d = %.3f seconds\n", i, extension_time[i].get_results_actual);
 			fprintf(stderr, "Total time spent in get_results_wasted by thread %d = %.3f seconds\n", i, extension_time[i].get_results_wasted);
 			total_extensions += no_of_extensions[i];

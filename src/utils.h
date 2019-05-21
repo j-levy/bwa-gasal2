@@ -116,9 +116,11 @@ typedef struct{
 	double host_mem_free;
 	double get_results_wasted;
 	double get_results_actual;
-}time_struct;
 
-// toggle this to disable log to file
-//#define TIME_LOG_TO_FILE
+	
+	double chain_preprocess;
+	double full_mem_aln1_core;
+	double full_mem_chain2aln;
+}time_struct;
 
 #endif
