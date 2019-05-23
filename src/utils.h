@@ -116,6 +116,14 @@ typedef struct{
 	double host_mem_free;
 	double get_results_wasted;
 	double get_results_actual;
+
+	double time_mem_chain;
+	double time_mem_chain_flt;
+	double time_mem_flt_chained_seeds;
+
+	double full_mem_aln1_core;
+	double full_mem_chain2aln;
+	double chain_preprocess;
 }time_struct;
 
 #endif

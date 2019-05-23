@@ -36,9 +36,11 @@ INCLUDES= -I$(GASAL_INCLUDE_DIR)
 LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
-
+ANALYSIS_FILENAME=125k
 VALGRIND=valgrind
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
+NVPROF=
+NVPROF=nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof
 
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt

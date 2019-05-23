@@ -1717,6 +1717,14 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     //extern double *extension_time;
     extern time_struct *extension_time;
     extern uint64_t *no_of_extensions;
+
+	double full_mem_aln1_core;
+	double full_mem_chain2aln;
+	double chain_preprocess;
+	double time_mem_chain, time_mem_chain_flt, time_mem_flt_chained_seeds;
+
+	full_mem_aln1_core = realtime();
+
     kvec_t(mem_alnreg_v) regs_vec;
     kv_init(regs_vec);
     kv_resize(mem_alnreg_v, regs_vec, batch_size);
@@ -1770,24 +1778,24 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 					read_seq[i] = read_seq[i] < 4 ? read_seq[i] : nst_nt4_table[(int) read_seq[i]]; 
 				
                 // ===NOTE: computing chains, store them in the mem_chain_v chn
+                chain_preprocess = realtime();
+                time_mem_chain = realtime();
                 chn = mem_chain(opt, bwt, bns, seq[j].l_seq, (uint8_t*)(read_seq), buf);
+                extension_time[tid].time_mem_chain += (realtime() - time_mem_chain);
+                time_mem_chain_flt = realtime();
                 chn.n = mem_chain_flt(opt, chn.n, chn.a);
+                extension_time[tid].time_mem_chain_flt += (realtime() - time_mem_chain_flt);
 
+                time_mem_flt_chained_seeds = realtime();
                 if (opt->shd_filter) 
 					mem_shd_flt_chained_seeds(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), chn.n, chn.a);
                 else mem_flt_chained_seeds(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), chn.n, chn.a);
                 if (bwa_verbose >= 4)
                     mem_print_chain(bns, &chn);
-                /*
-                    for (i = 0; i < chn.n; ++i) {
-                    mem_chain_t *c = &chn.a[i];
-                    if (c->n == 0) continue;
-                    uint64_t *srt;
-                    srt = malloc(c->n * 8);
-                    for (i = 0; i < c->n; ++i) srt[i] = (uint64_t)c->seeds[i].score<<32 | i;
-                    ks_introsort_64(c->n, srt);
-                    }
-                */
+                extension_time[tid].time_mem_flt_chained_seeds += (realtime() - time_mem_flt_chained_seeds);
+
+                extension_time[tid].chain_preprocess += (realtime() - chain_preprocess);
+
 
                 // ===NOTE: CHAINS DONE. COMPUTING ALIGNMENT
 
@@ -1802,8 +1810,10 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                         - Probably create yet another function to call GASAL2 (exactly like ksw_extend2)
 				Note: that function woudln't be integrated in mem_chain2aln because they wouldn't run in the same loop. See how GASAL2 call below is out of the loop call.
 				*/
+					full_mem_chain2aln = realtime();
                     mem_chain2aln(opt, bns, pac, seq[j].l_seq, (uint8_t*)(read_seq), p, &regs, &curr_read_offset, &curr_ref_offset, &gpu_batch_arr[gpu_batch_arr_idx]);
                     free(chn.a[i].seeds);
+					extension_time[tid].full_mem_chain2aln += (realtime() - full_mem_chain2aln);
                 }
                 curr_read_offset += read_l_seq_with_p;
                 free(chn.a);
@@ -1937,6 +1947,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     }
     kv_destroy(regs_vec);
     //fprintf(stderr, "--------------------------------------");
+	extension_time[tid].full_mem_aln1_core += (realtime() - full_mem_aln1_core);
+
 }
 
 mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar) {
