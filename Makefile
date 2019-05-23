@@ -64,7 +64,7 @@ short-index: all
 		./$(PROG) index /data/work/jlevy/hg19_short/chr01.fasta
 
 short: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 150 -v 4 /data/work/jlevy/hg19_short/chr01.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 150 -v 4 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.log 
 
 20k: all
 		./$(PROG) index fasta/target_batch.fasta
@@ -75,13 +75,27 @@ srr150index: all
 
 
 srr150: all
-		./$(PROG) gase_aln -g -t 12 -l 150 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+		./$(PROG) gase_aln -g -t 1 -l 153 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
 
 srr250: all
 	./$(PROG) gase_aln -t 12 -l 250 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > /data/work/jlevy/srr/250/res_bwa_gasal2.log
 
 srr150nvprof: all
 	nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof ./$(PROG) gase_aln -t 12 -l 150 /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.log
+
+
+1000: all
+		./$(PROG) gase_aln -g -t 1 -l 300 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_master_1000.log
+
+
+10: all
+		./$(PROG) gase_aln -g -t 1 -l 300 -v 4 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/10_1.fastq /data/work/jlevy/srr/150/10_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_master_10.sam
+
+125k: all
+		$(NVPROF) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/125k_1.fastq /data/work/jlevy/srr/150/125k_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_125k.sam
+		sha256sum /data/work/jlevy/srr/150/res_bwa-gasal2_125k.sam
+
+
 
 clean-db: all
 		rm /data/work/jlevy/srr/150/*.fasta.*

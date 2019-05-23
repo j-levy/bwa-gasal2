@@ -1838,6 +1838,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 gasal_aln_async(gpu_batch_arr[gpu_batch_arr_idx].gpu_storage, gpu_batch_arr[gpu_batch_arr_idx].n_query_batch, gpu_batch_arr[gpu_batch_arr_idx].n_target_batch, gpu_batch_arr[gpu_batch_arr_idx].n_seqs, args);
                 extension_time[tid].aln_kernel += (realtime() - time_extend);
                 gpu_batch_arr[gpu_batch_arr_idx].no_extend = 0;
+				gpu_batch *cur = &gpu_batch_arr[gpu_batch_arr_idx];
+                //fprintf(stderr, "batch launched with batch_size=%d, n_seqs=%d alingments, with n_query_batch=%d, n_target_batch=%d\n", cur->batch_size, cur->n_seqs, cur->n_query_batch, cur->n_target_batch );
             } else {
                 gpu_batch_arr[gpu_batch_arr_idx].no_extend = 1;
                 //fprintf(stderr, "I am here\n");
