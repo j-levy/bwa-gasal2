@@ -101,6 +101,12 @@ srr250: all
 srr150nvprof: all
 	$(NVPROF) ./$(PROG) gase_aln -t 12 -l 150 /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam
 
+## profiler
+BRANCHNAME=$(shell git rev-parse --abbrev-ref HEAD)
+prof: gmon.out
+	gprof $(PROG) > /data/work/jlevy/profile_$(BRANCHNAME).log
+
+
 ## builders
 
 all: makedir $(PROG) 
