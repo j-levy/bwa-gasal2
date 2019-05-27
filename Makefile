@@ -9,7 +9,7 @@ GASAL_INCLUDE_DIR = ./GASAL2/include/
 #SHD_DIR=./src/shd_filter/
 #CC=clang --analyze
 #
-CFLAGS=-g -Wall -Wno-unused-function -o0 -msse4.2 -std=c++11 -fpermissive -fstack-protector-all 
+CFLAGS=-pg -Wall -Wno-unused-function -O3 -msse4.2 -std=c++11 -fpermissive -fstack-protector-all 
 NVCCFLAGS=-g -lineinfo --gpu-architecture=compute_35 --gpu-code=sm_35 -O3 -Xcompiler -Wall -Xptxas -Werror --default-stream per-thread 
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
 AR=ar
@@ -37,9 +37,11 @@ INCLUDES= -I$(GASAL_INCLUDE_DIR)
 LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
-
+ANALYSIS_FILENAME=125k
 VALGRIND=
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
+NVPROF=
+#NVPROF=nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof
 
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt
@@ -65,20 +67,27 @@ short-index: all
 		./$(PROG) index /data/work/jlevy/hg19_short/chr1p1.fasta
 
 short: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.sam 
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.sam 
 
-1000: all
-		valgrind ./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1000_1.fastq /data/work/jlevy/srr/150/1000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1000.sam
+125k: all
+		$(NVPROF) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/125k_1.fastq /data/work/jlevy/srr/150/125k_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_125k.sam
+		sha256sum /data/work/jlevy/srr/150/res_bwa-gasal2_125k.sam
+
+10k: all
+		$(NVPROF) $(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/10000_1.fastq /data/work/jlevy/srr/150/10000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_10000.sam
+		sha256sum /data/work/jlevy/srr/150/res_bwa-gasal2_10000.sam
+
+10kall: clean gasal 10k
 
 1: all
-		./$(PROG) gase_aln -g -t 1 -l 300 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1.sam
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1.sam
 
 srr150index: all
 		./$(PROG) index /data/work/jlevy/hg19.fasta
 
 # take 1000 first reads from both files (means 4000 lines)
 srr150: all
-		 $(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 152 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam
+		$(NVPROF) $(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 152 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam
 
 #typing numbers is annoying
 srr: srr150
@@ -86,18 +95,13 @@ srr: srr150
 srr150gdb: all
 		echo "run gase_aln -g -t 12 -l 157 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam" |  gdb -tui ./$(PROG)
 
-
-
 srr250: all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 257 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > /data/work/jlevy/srr/250/res_bwa_gasal2.sam
 
 srr150nvprof: all
-	nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof ./$(PROG) gase_aln -t 12 -l 150 /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam
+	$(NVPROF) ./$(PROG) gase_aln -t 12 -l 150 /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam
 
-clean-db: all
-		rm /data/work/jlevy/srr/150/*.fasta.*
-		rm /data/work/jlevy/srr/150/*.fastq.*
-
+## builders
 
 all: makedir $(PROG) 
 
@@ -106,7 +110,7 @@ makedir:
 	@mkdir -p $(LIB_DIR)
 	@echo "If you donot see anything below this line then there is nothing to \"make\""
 
-bwa-gasal2:libbwa.a libshd_filter.a  $(AOBJS) main.o
+bwa-gasal2:libbwa.a libshd_filter.a $(GASAL_LIB_DIR)libgasal.a $(AOBJS) main.o
 		$(CXX) $(CFLAGS) $(DFLAGS) $(AOBJS_PATH) $(OBJ_DIR)main.o -o $@ -L$(LIB_DIR) -L$(CUDA_LIB_DIR)  -L$(GASAL_LIB_DIR) -lbwa -lshd_filter -lgasal $(LIBS)
 
 
@@ -122,11 +126,26 @@ libshd_filter.a: $(SHD_OBJS)
 #libgasal.a: $(GASAL_OBJS)
 		#make -C ./src/shd_filter libshd_filter.a
 		#ar -csru $(LIB_DIR)$@ $(GASAL_OBJS_PATH) 		
+$(GASAL_LIB_DIR)libgasal.a:
+	cd GASAL2/; ./run_all.sh; cd ..;
+
+gasal:
+	cd GASAL2/; ./run_all.sh; cd ..;
+
+## cleaners
 
 clean:
 		rm -f -r gmon.out $(OBJ_DIR) a.out $(PROG) *~ $(LIB_DIR)
-		rm *.log
+		#rm *.log
 		#make -C ./src/shd_filter/ clean
+
+clean_light:
+		rm $(LIB_DIR)libbwa.a $(OBJ_DIR)fastmap.o $(OBJ_DIR)bwamem.o $(GASAL_LIB_DIR)libgasal.a
+
+clean-db: all
+		rm /data/work/jlevy/srr/150/*.fasta.*
+		#rm /data/work/jlevy/srr/150/*.fastq.*
+
 
 #depend:
 #	( LC_ALL=C ; export LC_ALL; cd src; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- -f ../Makefile -p $(OBJ_DIR)  *.c *.cpp )

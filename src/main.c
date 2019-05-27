@@ -8,6 +8,8 @@
 #define PACKAGE_VERSION "0.1"
 #endif
 
+#define DEBUG_TIMELOG
+
 int bwa_fa2pac(int argc, char *argv[]);
 int bwa_pac2bwt(int argc, char *argv[]);
 int bwa_bwtupdate(int argc, char *argv[]);
@@ -123,15 +125,35 @@ int main(int argc, char *argv[])
 		double total_time = realtime() - t_real;
 		double total_extension_time = 0.0;
 		int n_threads = 0;
-		for (i = 0; i < 30; ++i) {
+		#ifdef DEBUG_TIMELOG
+		while (no_of_extensions[n_threads] > 0)
+			n_threads++;
+		fprintf(stderr, "n_threads = %d\n", n_threads);
+		for (i = 0; i < n_threads; i++) // display for max. 12 threads.
+		{
 			//fprintf(stderr, "Total time spent in host_mem_alloc by thread %d = %.3f seconds\n", i, extension_time[i].host_mem_alloc);
 			//fprintf(stderr, "Percentage of total time spent in extension by thread %d = %.3f\n", i, (extension_time[i]/total_time)*100);
 			//fprintf(stderr, "Percentage of total time spent in extension by thread %d = %.3f\n", i, (extension_time[i]/total_time)*100);
 			fprintf(stderr, "Total time spent in gpu_aln_kernel by thread %d = %.3f seconds\n", i, extension_time[i].aln_kernel);
+
+			/*
+			fprintf(stderr, "Total time spent in chain_preprocess by thread %d = %.3f seconds\n", i, extension_time[i].chain_preprocess);
+			fprintf(stderr, "Total time spent in mem_aln1_core by thread %d = %.3f seconds\n", i, extension_time[i].full_mem_aln1_core);
+			fprintf(stderr, "Total time spent in mem_chain2aln by thread %d = %.3f seconds\n", i, extension_time[i].full_mem_chain2aln);
+			*/
+
+			fprintf(stderr, "Total time spent in mem_aln1_core by thread %d = %.3f seconds\n", i, extension_time[i].full_mem_aln1_core);
+			fprintf(stderr, "\tin chain_preprocess by thread %d = %.3f seconds\n", i, extension_time[i].chain_preprocess);
+			fprintf(stderr, "\t\tin mem_chain by thread %d = %.3f seconds\n", i, extension_time[i].time_mem_chain);
+			fprintf(stderr, "\t\tin mem_chain_flt by thread %d = %.3f seconds\n", i, extension_time[i].time_mem_chain_flt);
+			fprintf(stderr, "\t\tin mem_flt_chained_seeds by thread %d = %.3f seconds\n", i, extension_time[i].time_mem_flt_chained_seeds);
+			fprintf(stderr, "\tin mem_chain2aln by thread %d = %.3f seconds\n", i, extension_time[i].full_mem_chain2aln);
+			fprintf(stderr, "\tin gpu_aln_kernel by thread %d = %.3f seconds\n", i, extension_time[i].aln_kernel);
+
 			fprintf(stderr, "Total time spent in get_results_actual by thread %d = %.3f seconds\n", i, extension_time[i].get_results_actual);
 			fprintf(stderr, "Total time spent in get_results_wasted by thread %d = %.3f seconds\n", i, extension_time[i].get_results_wasted);
 			total_extensions += no_of_extensions[i];
-			if (no_of_extensions[i] > 0) n_threads++;
+			
 			fprintf(stderr, "Total time spent in extension in gpu by thread %d (excluding mem_alloc and mem_free)= %.3f seconds\n", i, extension_time[i].aln_kernel + extension_time[i].get_results_actual + extension_time[i].get_results_wasted);
 			total_extension_time += (extension_time[i].aln_kernel + extension_time[i].get_results_actual + extension_time[i].get_results_wasted);
 		}
@@ -143,7 +165,7 @@ int main(int argc, char *argv[])
 		fprintf(f_exec_time,"Average extension percentage = %.3f\t", ((total_extension_time/n_threads)/total_time)*100);
 		fprintf(stderr,"Total no. of extensions = %llu\n", total_extensions);
 		fprintf(f_exec_time, "Percentage time wasted due to imperfect load balancing = %.3f\n", (total_load_balance_waste_time/total_time)*100);
-
+		#endif
 
 	}
 	free(bwa_pg);
