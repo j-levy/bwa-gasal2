@@ -9,7 +9,7 @@ GASAL_INCLUDE_DIR = ./GASAL2/include/
 #SHD_DIR=./src/shd_filter/
 #CC=clang --analyze
 #
-CFLAGS=-g -Wall -Wno-unused-function -o0 -msse4.2 -std=c++11 -fpermissive -fstack-protector-all 
+CFLAGS=-pg -Wall -Wno-unused-function -O3 -msse4.2 -std=c++11 -fpermissive -fstack-protector-all 
 NVCCFLAGS=-g -lineinfo --gpu-architecture=compute_35 --gpu-code=sm_35 -O3 -Xcompiler -Wall -Xptxas -Werror --default-stream per-thread 
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
 AR=ar
@@ -41,7 +41,7 @@ ANALYSIS_FILENAME=125k
 VALGRIND=
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
 NVPROF=
-#nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof
+#NVPROF=nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof
 
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt
