@@ -1,5 +1,4 @@
 CXX=g++
-CC=gcc
 VPATH=src:obj:lib
 OBJ_DIR=./obj/
 LIB_DIR=./lib/
@@ -9,7 +8,7 @@ GASAL_INCLUDE_DIR = ./GASAL2/include/
 #SHD_DIR=./src/shd_filter/
 #CC=clang --analyze
 #
-CFLAGS=-pg -Wall -Wno-unused-function -O3 -msse4.2 -std=c++11 -fpermissive -fstack-protector-all 
+CFLAGS=-pg -Wall -Wno-unused-function -O2 -msse4.2 -std=c++11 -fpermissive
 NVCCFLAGS=-g -lineinfo --gpu-architecture=compute_35 --gpu-code=sm_35 -O3 -Xcompiler -Wall -Xptxas -Werror --default-stream per-thread 
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
 AR=ar
@@ -37,80 +36,70 @@ INCLUDES= -I$(GASAL_INCLUDE_DIR)
 LIBS=-lm -lz -lpthread -lcudart
 SUBDIRS=.
 
-ANALYSIS_FILENAME=125k
-VALGRIND=
-#--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
-NVPROF=
-#NVPROF=nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof
-
-
 
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt
 endif
 
 #.SUFFIXES:.c .o .cc .cpp .cu
-
-#.c.o:
-#		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$@
-
-#.cpp.o:
-#		g++ -c $(CFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$(notdir $@)
 %.o: %.c
 	$(CXX) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$@
 %.o: %.cpp
 	$(CXX) -c $(CFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$@
-	
-#.cu.o:
-#		 nvcc -c $(NVCCFLAGS) $(INCLUDES) $< -o $(OBJ_DIR)$(notdir $@)
 
+## toggle for valgrind/nvprof
+ANALYSIS_FILENAME=125k
+VALGRIND=
+#--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
+NVPROF=
+
+#NVPROF=nvprof --profile-api-trace none -s -f -o /tmp/.nvprof/$(ANALYSIS_FILENAME).nvprof
+## automatic names for logging
+BRANCHNAME=$(shell git rev-parse --abbrev-ref HEAD)
+REPONAME=$(shell basename `git rev-parse --show-toplevel`)
+LOGPROFPATH=/data/work/jlevy/profile/
+RESULTSPATH=/data/work/jlevy/results/
+
+nametest:
+	echo $(REPONAME) $(BRANCHNAME)
 ## runners
 
 short-index: all 
 		./$(PROG) index /data/work/jlevy/hg19_short/chr1p1.fasta
 
-short: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.sam 
-
-125k: all
-		$(NVPROF) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/125k_1.fastq /data/work/jlevy/srr/150/125k_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_125k.sam
-		sha256sum /data/work/jlevy/srr/150/res_bwa-gasal2_125k.sam
-
-10k: all
-		$(NVPROF) $(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/10000_1.fastq /data/work/jlevy/srr/150/10000_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_10000.sam
-		sha256sum /data/work/jlevy/srr/150/res_bwa-gasal2_10000.sam
-
-10kall: clean gasal 10k
-
-1: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 153 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/1_1.fastq /data/work/jlevy/srr/150/1_2.fastq > /data/work/jlevy/srr/150/res_bwa-gasal2_1.sam
-
 srr150index: all
 		./$(PROG) index /data/work/jlevy/hg19.fasta
 
-# take 1000 first reads from both files (means 4000 lines)
+
+
+short: all
+		 $(VALGRIND) $(NVPROF) ./$(PROG) gase_aln -g -t 1 -l 150 -v 1 /data/work/jlevy/hg19_short/chr1p1.fasta /data/work/jlevy/srr_short4/srr150_1.fastq /data/work/jlevy/srr_short4/srr150_2.fastq > short.sam 
+
+10k: all
+		 $(VALGRIND) $(NVPROF) ./$(PROG) gase_aln -g -t 1 -l 150 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/10k_1.fastq /data/work/jlevy/srr/150/10k_2.fastq > $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_10k.sam
+		sha256sum $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_10k.sam
+125k: all
+		 $(VALGRIND) $(NVPROF) ./$(PROG) gase_aln -g -t 1 -l 150 -v 1 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/125k_1.fastq /data/work/jlevy/srr/150/125k_2.fastq > $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_125k.sam
+		sha256sum $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_125k.sam
+
 srr150: all
-		$(NVPROF) $(VALGRIND) ./$(PROG) gase_aln -g -t 1 -l 152 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam
+		 $(VALGRIND) $(NVPROF) ./$(PROG) gase_aln -g -t 1 -l 150 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_srr150.sam
+		 sha256sum $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_srr150.sam
 
 #typing numbers is annoying
 srr: srr150
 
-srr150gdb: all
-		echo "run gase_aln -g -t 12 -l 157 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam" |  gdb -tui ./$(PROG)
-
 srr250: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 257 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > /data/work/jlevy/srr/250/res_bwa_gasal2.sam
-
-srr150nvprof: all
-	$(NVPROF) ./$(PROG) gase_aln -t 12 -l 150 /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > /data/work/jlevy/srr/150/res_bwa_gasal2.sam
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 257 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_srrr250.sam
 
 ## profiler
-BRANCHNAME=$(shell git rev-parse --abbrev-ref HEAD)
-prof: gmon.out
-	gprof $(PROG) > /data/work/jlevy/profile_$(BRANCHNAME).log
+prof_125k: clean 125k gmon.out
+	gprof $(PROG) > $(LOGPROFPATH)$(REPONAME)_$(BRANCHNAME)_125k.log
+
+prof_srr150: clean srr150 gmon.out
+	gprof $(PROG) > $(LOGPROFPATH)$(REPONAME)_$(BRANCHNAME)_srr150.log
 
 ## builders
-
 all: makedir $(PROG) 
 
 makedir:
@@ -141,7 +130,6 @@ gasal:
 	cd GASAL2/; ./run_all.sh; cd ..;
 
 ## cleaners
-
 clean:
 		rm -f -r gmon.out $(OBJ_DIR) a.out $(PROG) *~ $(LIB_DIR)
 		#rm *.log
@@ -149,11 +137,6 @@ clean:
 
 clean_light:
 		rm $(LIB_DIR)libbwa.a $(OBJ_DIR)fastmap.o $(OBJ_DIR)bwamem.o $(GASAL_LIB_DIR)libgasal.a
-
-clean-db: all
-		rm /data/work/jlevy/srr/150/*.fasta.*
-		#rm /data/work/jlevy/srr/150/*.fastq.*
-
 
 #depend:
 #	( LC_ALL=C ; export LC_ALL; cd src; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- -f ../Makefile -p $(OBJ_DIR)  *.c *.cpp )
