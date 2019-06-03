@@ -75,6 +75,7 @@ typedef struct {
 		gasal_gpu_storage_t *gpu_storage;
 		int batch_size;
 		int batch_start;
+		int id;
 		int is_active;
 		int no_extend;
 		//int32_t *max_score, *read_start, *read_end, *ref_start, *ref_end;
