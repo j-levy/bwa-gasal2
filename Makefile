@@ -8,7 +8,7 @@ GASAL_INCLUDE_DIR = ./GASAL2/include/
 #SHD_DIR=./src/shd_filter/
 #CC=clang --analyze
 #
-CFLAGS=-pg -Wall -Wno-unused-function -O2 -msse4.2 -std=c++11 -fpermissive
+CFLAGS=-g -Wall -Wno-unused-function -O2 -msse4.2 -std=c++11 -fpermissive
 NVCCFLAGS=-g -lineinfo --gpu-architecture=compute_35 --gpu-code=sm_35 -O3 -Xcompiler -Wall -Xptxas -Werror --default-stream per-thread 
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
 AR=ar
@@ -50,6 +50,7 @@ endif
 ## toggle for valgrind/nvprof
 ANALYSIS_FILENAME=125k
 VALGRIND=
+#VALGRIND=valgrind
 #--track-origins=yes -tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes
 NVPROF=
 
@@ -90,7 +91,7 @@ srr150: all
 srr: srr150
 
 srr250: all
-		$(VALGRIND) ./$(PROG) gase_aln -g -t 12 -l 257 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_srrr250.sam
+		$(VALGRIND) ./$(PROG) gase_aln -g -t 11 -l 257 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_srrr250.sam
 
 ## profiler
 prof_125k: clean 125k gmon.out

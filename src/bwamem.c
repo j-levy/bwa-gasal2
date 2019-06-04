@@ -18,6 +18,7 @@
 #include "vector_filter.h"
 
 #include <vector>
+#include <map>
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -40,6 +41,10 @@ DEBUG4 is all about memory pages for extensible data.
 // The lower the FILTER_COEF, the more seeds are taken (hence, the more alignments are performed, even potentially useless ones.)
 #define FILTER_COEF (0.85)
 
+// SEQ_BATCH_SIZE is the number of sequences taken for each GPU batch. 
+// One sequence has multiple (e.g. 10~30) seeds hence alignments.
+// By default: 1000
+#define SEQ_BATCH_SIZE (1000)
 
 /* Theory on probability and scoring *ungapped* alignment
  *
@@ -1971,7 +1976,12 @@ void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_a
 }
 
 
-//#define GPU_READ_BATCH_SIZE 1000
+typedef struct {
+    int is_done[BOTH_SHORT_LONG];
+    int batch_size;
+    int batch_start;
+} metadata_gpu_batch_t ;
+
 void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *seq, void *buf, int batch_size, int batch_start_idx, mem_alnreg_v *w_regs, int tid, gasal_gpu_storage_v *gpu_storage_vec) {
     int j,  r;
     extern time_struct *extension_time;
@@ -1992,18 +2002,22 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     kv_init(regs_vec);
     kv_resize(mem_alnreg_v, regs_vec, batch_size);
     */
-    int GPU_READ_BATCH_SIZE;
-    if (batch_size >= 4000) 
-        GPU_READ_BATCH_SIZE = 1000;
+    int gpu_read_batch_size;
+    if (batch_size >= 4 * SEQ_BATCH_SIZE) 
+        gpu_read_batch_size = SEQ_BATCH_SIZE;
     else {
-        GPU_READ_BATCH_SIZE = (int)ceil((double)batch_size/(double)4) % 2 ? (int)ceil((double)batch_size/(double)4) + 1: (int)ceil((double)batch_size/(double)4);
+        gpu_read_batch_size = (int)ceil((double)batch_size/(double)4) % 2 ? (int)ceil((double)batch_size/(double)4) + 1: (int)ceil((double)batch_size/(double)4);
     }
     int internal_batch_count = 0;
-    internal_batch_count = (int)ceil(((double)batch_size)/((double)(GPU_READ_BATCH_SIZE)));
+    internal_batch_count = (int)ceil(((double)batch_size)/((double)(gpu_read_batch_size)));
 
     std::vector<mem_alnreg_v> regs_vec;
     regs_vec.resize(batch_size);
     regs_vec.clear();
+
+    std::map<int, metadata_gpu_batch_t> metadata;
+    //metadata_gpu_batch_t *metadata;
+    //metadata = (metadata_gpu_batch_t*) calloc(internal_batch_count, sizeof(metadata_gpu_batch_t));
 
     gpu_batch gpu_batch_short_arr[gpu_storage_vec->n];
     gpu_batch gpu_batch_long_arr[gpu_storage_vec->n];
@@ -2015,6 +2029,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         gpu_batch_short_arr[j].no_extend = 1;
         gpu_batch_short_arr[j].batch_size = 0;
         gpu_batch_short_arr[j].batch_start = 0;
+        gpu_batch_short_arr[j].id = -1;
     }
 
     for(j = 0; j < gpu_storage_vec[LONG].n; j++) // for all streams
@@ -2024,6 +2039,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         gpu_batch_long_arr[j].no_extend = 1;
         gpu_batch_long_arr[j].batch_size = 0;
         gpu_batch_long_arr[j].batch_start = 0;
+        gpu_batch_long_arr[j].id = -1;
     }
 
     // pointers to write loops easily
@@ -2042,18 +2058,17 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
     {
         //fprintf(stderr, "internal_batch_done (%d) < internal_batch_count (%d)\n", internal_batch_done, internal_batch_count);
         int gpu_stream_idx[BOTH_SHORT_LONG] = {0, 0};
-
-        while(  gpu_stream_idx[SHORT] != gpu_storage_vec[SHORT].n && 
-                gpu_stream_idx[LONG] != gpu_storage_vec[LONG].n && 
-                gpu_batch_long_arr[gpu_stream_idx[LONG]].gpu_storage->is_free != 1 && 
-                gpu_batch_short_arr[gpu_stream_idx[SHORT]].gpu_storage->is_free != 1 )         
-        {
-            gpu_stream_idx[LONG]++;
-            gpu_stream_idx[SHORT]++; // increment stream counter. 1 stream counter for each side. Assume both sides have the same numer of streams.
-        }
-
-        int internal_batch_start_idx = batch_processed;
         
+        //TODO: factorise SHORT/LONG 
+        while(  gpu_stream_idx[SHORT] < gpu_storage_vec[SHORT].n && 
+                gpu_batch_arr[SHORT][gpu_stream_idx[SHORT]].gpu_storage->is_free != 1 )         
+            gpu_stream_idx[SHORT]++;
+            
+        while(  gpu_stream_idx[LONG] < gpu_storage_vec[LONG].n &&
+                gpu_batch_arr[LONG][gpu_stream_idx[LONG]].gpu_storage->is_free != 1 )
+            gpu_stream_idx[LONG]++;
+    
+        int internal_batch_start_idx = batch_processed;
         // stream selected.
 
         if (internal_batch_start_idx < batch_size && 
@@ -2063,6 +2078,8 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             #ifdef DEBUG
             fprintf(stderr, ">[FILL] gpu_stream_idx=%d, internal_batch_start_idx (%d) < batch_size (%d)\n", gpu_stream_idx[SHORT], internal_batch_start_idx, batch_size);    
             #endif
+
+            //TODO: factorize SHORT/LONG
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_query_batch = 0;
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_target_batch = 0;
             gpu_batch_short_arr[gpu_stream_idx[SHORT]].n_seqs = 0;
@@ -2071,12 +2088,12 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             gpu_batch_long_arr[gpu_stream_idx[LONG]].n_query_batch = 0;
             gpu_batch_long_arr[gpu_stream_idx[LONG]].n_target_batch = 0;
             gpu_batch_long_arr[gpu_stream_idx[LONG]].n_seqs = 0;
-            gpu_batch_short_arr[gpu_stream_idx[LONG]].gpu_storage->current_n_alns = 0;
+            gpu_batch_long_arr[gpu_stream_idx[LONG]].gpu_storage->current_n_alns = 0;
 
             int curr_read_offset[BOTH_SHORT_LONG] = {0, 0};
             int curr_ref_offset[BOTH_SHORT_LONG]  = {0, 0};
 
-            int internal_batch_size = ((batch_size - batch_processed >= GPU_READ_BATCH_SIZE)  ? GPU_READ_BATCH_SIZE : batch_size - batch_processed);
+            int internal_batch_size = ((batch_size - batch_processed >= gpu_read_batch_size)  ? gpu_read_batch_size : batch_size - batch_processed);
 
             for (j = batch_start_idx + internal_batch_start_idx; j < (batch_start_idx + internal_batch_start_idx) + internal_batch_size; ++j)
 		    {
@@ -2136,7 +2153,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
             // tried my best to make it readable. I know manipulating addresses can be confusing. Please don't be mad
             // launching the LONG batch first saves 1%, and it's free.
             int side;
-            for(side=BOTH_SHORT_LONG-1; side >= 0; --side)
+            for(side = BOTH_SHORT_LONG-1; side >= 0; --side)
             {
                 gpu_batch *cur = ((gpu_batch_arr[side]) + gpu_stream_idx[side]);
                 if ( cur->n_seqs > 0) 
@@ -2170,9 +2187,17 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                 // internal_batch_size = 1000 but there may be 12039 seeds and actually 21948 alignments.
                 cur->batch_size = internal_batch_size; 
                 cur->batch_start = internal_batch_start_idx;
+                cur->id = internal_batch_no;
                 cur->is_active = 1;
+
+                // note: metadata is an std::map, operating on Key-Values pairs. If the pair doesn't exist for a given key, it creates it.
+                metadata[internal_batch_no].batch_size = internal_batch_size;
+                metadata[internal_batch_no].batch_start = internal_batch_start_idx;
+                metadata[internal_batch_no].is_done[SHORT] = 0;
+                metadata[internal_batch_no].is_done[LONG] = 0;
+                
                 #ifdef DEBUG
-                fprintf(stderr, ">[LAUNCH] batch (%s) launched with batch_size=%d, n_seqs=%d alingments, with n_query_batch=%d, n_target_batch=%d\n", (side==SHORT?"SHORT":"LONG"), cur->batch_size, cur->n_seqs, cur->n_query_batch, cur->n_target_batch );
+                fprintf(stderr, ">[LAUNCH] batch (%s) #%d (str %d/%d) launched with batch_size=%d, n_seqs=%d alingments, with n_query_batch=%d, n_target_batch=%d\n", (side==SHORT?"SHORT":"LONG"), internal_batch_no, gpu_stream_idx[side],  gpu_storage_vec[side].n, cur->batch_size, cur->n_seqs, cur->n_query_batch, cur->n_target_batch );
                 #endif
 
             }
@@ -2185,19 +2210,20 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
         // ===NOTE: GASAL2 GET RESULT, measure time
         //fprintf(stderr, "Current extension time of %d seeds on GPU by thread no. %d is %.3f usec\n", kv_size(ref_seq_lens), tid,  extension_time[tid]*1e6);
         int m;
-        int internal_batch_idx = gpu_stream_idx[SHORT];
+        int internal_batch_idx = 0;
+        int stream_idx = 0;
         int prev_internal_batch_done = internal_batch_done;
-        //while (internal_batch_idx != gpu_storage_vec[SHORT].n) //loop over all streams to retrieve results of finished streams
-        while(prev_internal_batch_done == internal_batch_done)// blocking function for score retrieval
-        {
-			//fprintf(stderr, "internal_batch_idx != gpu_storage_vec[SHORT].n (%d != %d)\n", internal_batch_idx, gpu_storage_vec[SHORT].n);
-            for (m = 0; m < BOTH_SHORT_LONG; m++) // proceed both arrays, SHORT and LONG
-            {
-                gpu_batch *cur = ((gpu_batch_arr[m]) + internal_batch_idx);
-                time_extend = realtime();
 
-                //[KSW_CPU]: set x to 1 (computation done) because of computation done on CPU
+
+        for (m = 0; m < BOTH_SHORT_LONG; m++) // proceed both arrays, SHORT and LONG
+        {
+            for(stream_idx = gpu_storage_vec[m].n - 1; stream_idx >= 0; stream_idx--)
+            {
+                gpu_batch *cur = (gpu_batch_arr[m] + stream_idx);
+                time_extend = realtime();
+                internal_batch_idx = cur->id; // the ID of the batch is the Key in the Key/Value std::map. Handy!
                 int x = 0;
+                //[KSW_CPU]: set x to 1 (computation done) because of computation done on CPU
                 if (cur->gpu_storage->is_free != 1) {
                     //[KSW_CPU] commented out aln_async because of computation done on CPU 
                     x = (gasal_is_aln_async_done(cur->gpu_storage) == 0);
@@ -2205,14 +2231,23 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d \n", tid, batch_size, internal_batch_count, internal_batch_idx);
                 }
                 if (x)
+                {
                     extension_time[tid].get_results_actual += (realtime() - time_extend);
+                }
                 else if (cur->gpu_storage->is_free != 1 && x == 0) 
+                {
                     extension_time[tid].get_results_wasted += (realtime() - time_extend);
+                }
                 //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is %d, batches launched=%d, batches done=%d \n", tid, batch_size, internal_batch_count, internal_batch_idx, internal_batch_no, internal_batch_done);
                 //fprintf(stderr, "Thread no. %d stuck here with batch size %d and batch count %d. internal batch idx is \n");
                 //    fprintf(stderr, "x==%d\n", x);
                 //    fprintf(stderr, "cur->no_extend==%d\n", cur->no_extend);
-                //    fprintf(stderr, "cur->is_active==%d\n", cur->is_active);
+                //    fprintf(stderr, "cur->is_active==%d\n", cur->is_active); 
+
+                //fprintf(stderr, "internal_batch_idx != gpu_storage_vec[SHORT].n (%d != %d)\n", internal_batch_idx, gpu_storage_vec[SHORT].n);
+
+                //while(prev_internal_batch_done == internal_batch_done)// blocking function for score retrieval
+
                 if ((x == 1 || cur->no_extend == 1) && cur->is_active == 1)
                 {
                     cur->gpu_storage->current_n_alns = 0;
@@ -2223,7 +2258,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     int32_t   *read_end = cur->gpu_storage->host_res->query_batch_end;
                     int32_t    *ref_end = cur->gpu_storage->host_res->target_batch_end;
                     #ifdef DEBUG
-                    fprintf(stderr, ">[RETRIEVE] (%s) + internal_batch_idx=%d, regs_vec.size=%d, j=(batch_start_idx=%d + internal_batch_start_idx=%d) for cur->batch_size=%d aligns\n", (m==SHORT?"SHORT":"LONG"), internal_batch_idx,  regs_vec.size(), batch_start_idx, internal_batch_start_idx, cur->batch_size );
+                    fprintf(stderr, ">[RETRIEVE] (%s) #%d (str %d/%d), regs_vec.size=%d, j=(batch_start_idx=%d + internal_batch_start_idx=%d) for cur->batch_size=%d aligns\n", (m==SHORT?"SHORT":"LONG"), internal_batch_idx, stream_idx, gpu_storage_vec[m].n, regs_vec.size(), cur->batch_start, internal_batch_start_idx, cur->batch_size );
                     #endif
                     int seq_idx=0;
                     for(j = 0, r = cur->batch_start; j < cur->batch_size; ++j, ++r)
@@ -2231,7 +2266,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                         int i;
                         mem_alnreg_v regs = regs_vec.at(r);
 
-                        if (m == LONG)
+                        if (m == LONG) //TODO: remove this double definition, simplify it
                         {
                             //fprintf(stderr, "LONG batch got. r=%d, regs.n=%d\n", r, regs.n);
                             for(i = 0; i < regs.n; ++i)
@@ -2282,75 +2317,75 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                         } // end if (LONG / SHORT)
 
                     } // end for (on cur->batch_size (up to 1000) (WHICH IS DIFFERENT FROM batch_size WHICH IS THE CPU BATCH, GOING TO 4000))
-                    cur->is_active = 2;
+                    cur->is_active = 0;
+                    cur->id = -1;
+                    metadata[internal_batch_idx].is_done[m] = 1;
                     //internal_batch_done++;
                     //fprintf(stderr, "internal batch %d done\n", internal_batch_done - 1);
-                }
-            }
-            if ((( gpu_batch_arr[SHORT]) + internal_batch_idx)->is_active == 2 && ((gpu_batch_arr[LONG]) + internal_batch_idx)->is_active == 2 )
-            {
-                 // gather results.
-                gpu_batch *cur =(( gpu_batch_arr[LONG]) + internal_batch_idx); // taking "long" but if there's an alignment the data is the same on long and short (abritrary)
-                // fprintf(stderr, "gather results\n");
-                
-                for (r = 0, j = cur->batch_start; r < cur->batch_size; ++j, ++r)
-                {
-                    //fprintf(stderr, "r=%d, j=%d\n", r, j);
-                    int i;
-                    int seq_idx=0;
-                    mem_alnreg_v regs = regs_vec.at(j); // J.L. kv remove kv_A(regs_vec, j);
 
-                    for(i = 0; i < regs.n; ++i)
+                    if (metadata[internal_batch_idx].is_done[SHORT] == 1 && 
+                        metadata[internal_batch_idx].is_done[LONG] == 1)
                     {
-                        //FIXME: score problem?
-                        mem_alnreg_t *a = &regs.a[i];
-                        //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
-                        if (a->seedlen0 != seq[j].l_seq && a->align_sides > 0) //kv_A(read_seq_lens, seq_idx)
+                        // fprintf(stderr, "gather results\n");
+                        for (r = 0, j = metadata[internal_batch_idx].batch_start; 
+                             r < metadata[internal_batch_idx].batch_size; 
+                             ++j, ++r)
                         {
-                            a->score = a->part[LEFT].score + a->part[RIGHT].score;
-                            a->score = a->score - (a->align_sides == 2? a->seedlen0 : 0); // the seed length have been counted twice if there was 2 alignments
-                            a->qb = a->query_seed_begin - a->part[LEFT].query_end;
-                            a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end;
-                            a->rb = a->target_seed_begin - a->part[LEFT].ref_end;
-                            a->re = a->target_seed_begin + a->seedlen0 + a->part[RIGHT].ref_end;
-                            a->truesc = a->score;
-                            #ifdef DEBUG2
-                                score_printerz(a);
-                            #endif
+                            //fprintf(stderr, "r=%d, j=%d\n", r, j);
+                            int i;
+                            int seq_idx=0;
+                            mem_alnreg_v regs = regs_vec.at(j); // J.L. kv remove kv_A(regs_vec, j);
+
+                            for(i = 0; i < regs.n; ++i)
+                            {
+                                mem_alnreg_t *a = &regs.a[i];
+                                //fprintf(stderr, "r=%d, seq[r].l_seq=%d\n", r, seq[r].l_seq);
+                                if (a->seedlen0 != seq[j].l_seq && a->align_sides > 0) //kv_A(read_seq_lens, seq_idx)
+                                {
+                                    a->score = a->part[LEFT].score + a->part[RIGHT].score;
+                                    a->score = a->score - (a->align_sides == 2? a->seedlen0 : 0); // the seed length have been counted twice if there was 2 alignments
+                                    a->qb = a->query_seed_begin - a->part[LEFT].query_end;
+                                    a->qe = a->query_seed_begin + a->seedlen0 + a->part[RIGHT].query_end;
+                                    a->rb = a->target_seed_begin - a->part[LEFT].ref_end;
+                                    a->re = a->target_seed_begin + a->seedlen0 + a->part[RIGHT].ref_end;
+                                    a->truesc = a->score;
+                                    #ifdef DEBUG2
+                                        score_printerz(a);
+                                    #endif
+                                    
+                                    seq_idx++;
+                                }
+                                //free(a);
+                            }
                             
-                            seq_idx++;
-                        }
-                        //free(a);
-                    }
-                    
-                    regs.n = mem_sort_dedup_patch(opt, bns, pac,(uint8_t*)(seq[j].seq), regs.n, regs.a);
-                    if (bwa_verbose >= 4) {
-                        err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
-                        for (i = 0; i < regs.n; ++i) {
-                            mem_alnreg_t *p = &regs.a[i];
-                            printf("** %d, [%d,%d) <=> [%ld,%ld)\n", p->score, p->qb, p->qe, (long)p->rb, (long)p->re);
-                        }
-                    }
-                    for (i = 0; i < regs.n; ++i) {
-                        mem_alnreg_t *p = &regs.a[i];
-                        if (p->rid >= 0 && bns->anns[p->rid].is_alt)
-                            p->is_alt = 1;
-                        //free(kv_A(read_seqns, i));
-                    }
-                    w_regs[j + batch_start_idx] = regs;
-                }
-                (gpu_batch_arr[SHORT] + internal_batch_idx)->is_active = 0;
-                (gpu_batch_arr[LONG] + internal_batch_idx)->is_active = 0;
-                
-                internal_batch_done++;
+                            regs.n = mem_sort_dedup_patch(opt, bns, pac,(uint8_t*)(seq[j].seq), regs.n, regs.a);
+                            if (bwa_verbose >= 4) {
+                                err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
+                                for (i = 0; i < regs.n; ++i) {
+                                    mem_alnreg_t *p = &regs.a[i];
+                                    printf("** %d, [%d,%d) <=> [%ld,%ld)\n", p->score, p->qb, p->qe, (long)p->rb, (long)p->re);
+                                }
+                            }
+                            for (i = 0; i < regs.n; ++i) {
+                                mem_alnreg_t *p = &regs.a[i];
+                                if (p->rid >= 0 && bns->anns[p->rid].is_alt)
+                                    p->is_alt = 1;
+                                //free(kv_A(read_seqns, i));
+                            }
+                            w_regs[j + batch_start_idx] = regs;
+                        }           
+                        internal_batch_done++;
+                    } // end if
+                    // results gathered
+
+                }// end if (stream collected)
             }
-            //internal_batch_idx++; // if BOTH SHORT LONG are done on this stream, go to next stream.
         }
-        // results gathered
         
-    }
+    }// end while (internal_batch_done < internal_batch_count) 
     //kv_destroy(regs_vec); //J.L. kv remove
     //fprintf(stderr, "--------------------------------------");
+
     extension_time[tid].full_mem_aln1_core += (realtime() - full_mem_aln1_core);
 }
 
