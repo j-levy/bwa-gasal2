@@ -430,13 +430,13 @@ int gase_aln(int argc, char *argv[])
 					args);
 		*/
 		
-		
+		// working values : 205, 2, 1000, 152, 300
 		// note that these values are not strict anymore because all fields can be extended.
-		int Coef = 205; // avg number of seeds per sequence  //FIXME: 2 or less makes weird target_lengths
+		int Coef = 120; // avg number of seeds per sequence  //FIXME: 2 or less makes weird target_lengths
 		int Coef2 = 2;
 		int NbrOfSeqs = 1000;
 		int ReadLength = 152; // max is 152, mean is 152/2, taking a margin.
-		int RefLength = 600; // max is ~300, mean is 300/2, taking a margin. 
+		int RefLength = 300; // max is ~300, mean is 300/2, taking a margin. 
 		gasal_init_streams(&(gpu_storage_vec_arr[z]), 
 				Coef * NbrOfSeqs * ReadLength , 		//host_max_query_batch_bytes
 				Coef * NbrOfSeqs * ReadLength , 		//gpu_max_query_batch_bytes
