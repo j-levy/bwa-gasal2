@@ -1172,7 +1172,7 @@ void fill_extension(gpu_batch *cur, uint8_t *ref_seq, uint8_t *read_seq, int ref
     
     cur->gpu_storage->current_n_alns++;
 
-    if (cur->gpu_storage->current_n_alns >= cur->gpu_storage->host_max_n_alns)
+    if (cur->gpu_storage->current_n_alns > cur->gpu_storage->host_max_n_alns)
     {
         Parameters *args;
         args = new Parameters(0, NULL);
@@ -1898,7 +1898,7 @@ void decoy_cpu_align(gasal_gpu_storage_t *gpu_storage, const uint32_t actual_n_a
             memcpy(query, &(cur_page->data[query_offset - cur_page->offset]), query_length + nbr_N);
         }
 
-        #ifdef wDEBUG4
+        #ifdef DEBUG4
         if (cur_page->offset != prev_page)
         {
             //prev_page = cur_page->offset;

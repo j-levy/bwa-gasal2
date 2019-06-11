@@ -431,9 +431,10 @@ int gase_aln(int argc, char *argv[])
 		*/
 		
 		// working values : 205, 2, 1000, 152, 300
+		// working values : 120, 3, 1000, 152, 300
 		// note that these values are not strict anymore because all fields can be extended.
-		int Coef = 120; // avg number of seeds per sequence  //FIXME: 2 or less makes weird target_lengths
-		int Coef2 = 2;
+		int Coef = 30; // avg number of seeds per sequence  //FIXME: 2 or less makes weird target_lengths
+		int Coef2 = 12;
 		int NbrOfSeqs = 1000;
 		int ReadLength = 152; // max is 152, mean is 152/2, taking a margin.
 		int RefLength = 300; // max is ~300, mean is 300/2, taking a margin. 
