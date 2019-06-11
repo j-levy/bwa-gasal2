@@ -431,10 +431,10 @@ int gase_aln(int argc, char *argv[])
 		*/
 		
 		// working values : 205, 2, 1000, 152, 300
-		// working values : 120, 3, 1000, 152, 300
+		// working values : 120, 3, 1000, 152, 300 
 		// note that these values are not strict anymore because all fields can be extended.
-		int Coef = 30; // avg number of seeds per sequence  //FIXME: 2 or less makes weird target_lengths
-		int Coef2 = 12;
+		int Coef = 120; // avg number of seeds per sequence  //FIXME: 2 or less makes weird target_lengths
+		int Coef2 = 3;
 		int NbrOfSeqs = 1000;
 		int ReadLength = 152; // max is 152, mean is 152/2, taking a margin.
 		int RefLength = 300; // max is ~300, mean is 300/2, taking a margin. 
@@ -453,8 +453,8 @@ int gase_aln(int argc, char *argv[])
 	extension_time[0].gpu_mem_alloc += (realtime() - time_extend);
 
 	//fprintf(stderr, "Time required to allocate gpu memory and host memory for %d threads = %.3f seconds\n", opt->n_threads, extension_time[0].gpu_mem_alloc);
-	f_exec_time = fopen(run_exec_time, "a");
-	//The columns in the tab seperated run_exec_time are:
+	FILE* f_exec_time_metadata = fopen(run_exec_time, "a");
+	// The columns in the tab seperated run_exec_time are:
 	// 1- read length
 	//	2- seed type
 	//	3- min. seed length
@@ -462,7 +462,7 @@ int gase_aln(int argc, char *argv[])
 	//	5- DP algo
 	//	6- execution time in seconds
 	//There is no new line at the end so more values may be printed on the same line, if desired.
-	fprintf(f_exec_time,"%d\t%d\t%d\t%d\t%d\t%d\t",opt->n_threads, opt->read_len, opt->seed_type, opt->min_seed_len, opt->seed_intv, opt->dp_type);
+	 fprintf(f_exec_time_metadata,"%d\t%d\t%d\t%d\t%d\t%d\t",opt->n_threads, opt->read_len, opt->seed_type, opt->min_seed_len, opt->seed_intv, opt->dp_type);
 
 	bwa_print_sam_hdr(aux.idx->bns, hdr_line);
 	aux.actual_chunk_size = fixed_chunk_size > 0? fixed_chunk_size : opt->chunk_size * opt->n_threads;

@@ -87,6 +87,9 @@ srr150: all
 		 $(VALGRIND) $(NVPROF) ./$(PROG) gase_aln -g -t 1 -l 150 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_srr150.sam
 		 sha256sum $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_srr150.sam
 
+srr_threads: all
+		 $(VALGRIND) $(NVPROF) ./$(PROG) mem -t $(N_THREAD) /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/150/SRR949537_1.fastq /data/work/jlevy/srr/150/SRR949537_2.fastq > $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_srr150.sam
+
 #typing numbers is annoying
 srr: srr150
 
@@ -139,6 +142,8 @@ clean:
 clean_light:
 		rm $(LIB_DIR)libbwa.a $(OBJ_DIR)fastmap.o $(OBJ_DIR)bwamem.o $(GASAL_LIB_DIR)libgasal.a
 
+clean_time: time.log
+		rm time.log
 #depend:
 #	( LC_ALL=C ; export LC_ALL; cd src; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- -f ../Makefile -p $(OBJ_DIR)  *.c *.cpp )
 depend:
