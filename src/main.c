@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 	double t_real;
 	extern FILE* f_exec_time;
 	f_exec_time = NULL;
-	f_exec_time = fopen("time.log", "w+");
+	f_exec_time = fopen("time.log", "a+");
 	if (f_exec_time == NULL)
 	{
 		fprintf(stderr, "[main] error: could not open/create the log file time.log\nAborting.\n");
@@ -120,7 +120,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "[%s] CMD:", __func__);
 		for (i = 0; i < argc; ++i)
 			fprintf(stderr, " %s", argv[i]);
-		fprintf(f_exec_time,"Total_time = %.3f\t", realtime() - t_real);
+		fprintf(f_exec_time,"\nTotal_time = %.3f\t", realtime() - t_real);
 		fprintf(stderr, "\n[%s] Real time: %.3f sec; CPU: %.3f sec\n", __func__, realtime() - t_real, cputime());
 		double total_time = realtime() - t_real;
 		double total_extension_time = 0.0;
@@ -161,6 +161,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "Total time spent in gpu_mem_free = %.3f seconds\n", extension_time[0].gpu_mem_free);
 		//total_extension_time += (extension_time[0].gpu_mem_alloc + extension_time[0].gpu_mem_free);
 
+		fprintf(f_exec_time, "n_threads = %d\t", n_threads);
 		fprintf(f_exec_time,"Average extension time = %.3f\t", (total_extension_time/n_threads) + (extension_time[0].gpu_mem_alloc + extension_time[0].gpu_mem_free));
 		fprintf(f_exec_time,"Average extension percentage = %.3f\t", ((total_extension_time/n_threads)/total_time)*100);
 		fprintf(stderr,"Total no. of extensions = %llu\n", total_extensions);
