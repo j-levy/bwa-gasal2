@@ -98,7 +98,7 @@ mem_opt_t *mem_opt_init() {
 	o->e_del = o->e_ins = 1;
 	o->w = 300;
 	o->T = 30;
-	o->zdrop = 0;
+	o->zdrop = 30;
 	//o->zdrop = 0;
 	o->pen_unpaired = 17;
 	o->pen_clip5 = o->pen_clip3 = 5;
@@ -2169,7 +2169,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
                     args->algo = KSW;
                     args->isReverseComplement = false;
                     args->start_pos = WITHOUT_START; // actually "without start" would be sufficient...
-
+                    args->zdrop = opt->zdrop;
                     // launch alignment processes
                     //[KSW_CPU] using CPU computation
                     gasal_aln_async(cur->gpu_storage, cur->n_query_batch, cur->n_target_batch, cur->n_seqs, args);
