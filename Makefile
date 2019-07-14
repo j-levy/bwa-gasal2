@@ -96,6 +96,9 @@ srr: srr150
 srr250: all
 		$(VALGRIND) ./$(PROG) gase_aln -g -t 11 -l 257 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_srrr250.sam
 
+srr250_threads: all
+		 $(VALGRIND) $(NVPROF) ./$(PROG) gase_aln -g -t $(N_THREAD) -l 257 /data/work/jlevy/hg19.fasta /data/work/jlevy/srr/250/SRR835433.fastq_1 /data/work/jlevy/srr/250/SRR835433.fastq_2 > $(RESULTSPATH)$(REPONAME)_$(BRANCHNAME)_srrr250.sam
+
 ## profiler
 prof_125k: clean 125k gmon.out
 	gprof $(PROG) > $(LOGPROFPATH)$(REPONAME)_$(BRANCHNAME)_125k.log
