@@ -24,6 +24,7 @@
 #  include "malloc_wrap.h"
 #endif
 
+#define GPU_SELECT (1)
 /* Notes:
 DEBUG  is for information about batches launch/retrieval.
 DEBUG2 is for information about sequences and scores.
@@ -1995,7 +1996,7 @@ void mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 	full_mem_aln1_core = realtime();
 
     // J.L. 2019-05-20  Disabled selection (there's no choice anymore)
-    // gasal_set_device(GPU_SELECT, false);
+    gasal_set_device(GPU_SELECT, false);
 
     /* J.L. 2019-03-18 kv remove
     kvec_t(mem_alnreg_v) regs_vec;
